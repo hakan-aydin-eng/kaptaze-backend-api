@@ -4,6 +4,9 @@ services:
     env: node
     buildCommand: npm install
     startCommand: npm start
+    # Custom domain configuration
+    domains:
+      - api.kaptaze.com
     envVars:
       - key: NODE_ENV
         value: production

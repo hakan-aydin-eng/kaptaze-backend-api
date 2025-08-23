@@ -10,8 +10,12 @@ const { authenticate, authorize } = require('../middleware/auth');
 const Application = require('../models/Application');
 const Restaurant = require('../models/Restaurant');
 const User = require('../models/User');
+const EmailService = require('../services/emailService');
 
 const router = express.Router();
+
+// Initialize email service
+const emailService = new EmailService();
 
 // All admin routes require authentication and admin role
 router.use(authenticate);
@@ -249,7 +253,17 @@ router.post('/applications/:applicationId/approve', [
 
         console.log(`✅ Application approved: ${application.applicationId} - ${application.businessName}`);
 
-        // TODO: Send approval email with credentials
+        // Send approval email with credentials
+        try {
+            await emailService.sendApplicationApprovalEmail(application, {
+                username: finalUsername,
+                password: finalPassword
+            });
+            console.log(`📧 Approval email sent to: ${application.email}`);
+        } catch (emailError) {
+            console.error('❌ Failed to send approval email:', emailError.message);
+            // Don't fail the approval process if email fails
+        }
 
         res.json({
             success: true,
@@ -329,7 +343,14 @@ router.post('/applications/:applicationId/reject', [
 
         console.log(`❌ Application rejected: ${application.applicationId} - ${reason}`);
 
-        // TODO: Send rejection email
+        // Send rejection email
+        try {
+            await emailService.sendApplicationRejectionEmail(application, reason);
+            console.log(`📧 Rejection email sent to: ${application.email}`);
+        } catch (emailError) {
+            console.error('❌ Failed to send rejection email:', emailError.message);
+            // Don't fail the rejection process if email fails
+        }
 
         res.json({
             success: true,
