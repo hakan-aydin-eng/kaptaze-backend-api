@@ -11,17 +11,19 @@ services:
       - key: NODE_ENV
         value: production
       - key: MONGODB_URI
-        value: mongodb+srv://kaptaze-admin:kaptaze1121@kaptaze-cluster.ra9padd.mongodb.net/kaptazedb?retryWrites=true&w=majority&appName=kaptaze-cluster
+        value: "mongodb+srv://kaptaze-admin:kaptaze1121@kaptaze-cluster.ra9padd.mongodb.net/kaptazedb?retryWrites=true&w=majority&appName=kaptaze-cluster"
       - key: JWT_SECRET
-        value: kaptaze-super-secret-jwt-key-production-2025-secure
+        value: "kaptaze-super-secret-jwt-key-production-2025-secure"
       - key: JWT_EXPIRES_IN
-        value: 24h
+        value: "24h"
       - key: FRONTEND_URLS
-        value: https://kaptaze.com,https://kaptaze.netlify.app,https://www.kaptaze.com
+        value: "https://kaptaze.com,https://kaptaze.netlify.app,https://www.kaptaze.com"
       - key: BCRYPT_SALT_ROUNDS
-        value: 12
+        value: "12"
       - key: RATE_LIMIT_WINDOW_MS
-        value: 900000
+        value: "900000"
       - key: RATE_LIMIT_MAX_REQUESTS
-        value: 50
+        value: "50"
+      - key: FROM_EMAIL
+        value: "noreply@kaptaze.com"
     plan: free

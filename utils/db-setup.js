@@ -24,7 +24,7 @@ const connectDB = async () => {
         }
 
         console.log(`🔗 Connecting to MongoDB...`);
-        console.log(`📍 URI: ${mongoUri.replace(/:[^:]*@/, ':****@')}`);
+        console.log(`📍 URI: ${mongoUri ? mongoUri.replace(/:[^:]*@/, ':****@') : 'undefined'}`);
         
         const conn = await mongoose.connect(mongoUri, {
             // Modern connection options
