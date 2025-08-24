@@ -455,6 +455,94 @@ router.patch('/restaurants/:restaurantId', [
     }
 });
 
+// @route   GET /admin/users
+// @desc    Get all users
+// @access  Private (Admin)
+router.get('/users', async (req, res, next) => {
+    try {
+        const { role, status, search, page = 1, limit = 20 } = req.query;
+
+        const filter = {};
+        if (role) filter.role = role;
+        if (status) filter.status = status;
+        if (search) {
+            filter.$or = [
+                { firstName: { $regex: search, $options: 'i' } },
+                { lastName: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } },
+                { username: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const skip = (page - 1) * limit;
+        const users = await User.find(filter)
+            .populate('restaurantId', 'name category status')
+            .select('-password') // Exclude password field
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parseInt(limit));
+
+        const total = await User.countDocuments(filter);
+
+        res.json({
+            success: true,
+            data: {
+                users,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    pages: Math.ceil(total / limit)
+                }
+            }
+        });
+
+    } catch (error) {
+        next(error);
+    }
+});
+
+// @route   PATCH /admin/users/:userId
+// @desc    Update user status
+// @access  Private (Admin)
+router.patch('/users/:userId', [
+    body('status').optional().isIn(['active', 'inactive', 'suspended']),
+    body('notes').optional().trim().isLength({ max: 500 })
+], async (req, res, next) => {
+    try {
+        const { userId } = req.params;
+        const { status, notes } = req.body;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'User not found'
+            });
+        }
+
+        if (status) user.status = status;
+        if (notes) user.adminNotes = notes;
+
+        await user.save();
+
+        // If user is restaurant owner, also update restaurant status
+        if (user.role === 'restaurant' && user.restaurantId) {
+            const restaurantStatus = status === 'active' ? 'active' : 'inactive';
+            await Restaurant.findByIdAndUpdate(user.restaurantId, { status: restaurantStatus });
+        }
+
+        res.json({
+            success: true,
+            message: 'User updated successfully',
+            data: user
+        });
+
+    } catch (error) {
+        next(error);
+    }
+});
+
 // Helper functions
 function generateUsername(businessName) {
     const cleaned = businessName
