@@ -191,6 +191,46 @@ const restaurantSchema = new mongoose.Schema({
         }
     },
     
+    // Packages/Menu Items
+    packages: [{
+        id: {
+            type: String,
+            required: true
+        },
+        name: {
+            type: String,
+            required: true,
+            trim: true
+        },
+        description: {
+            type: String,
+            trim: true
+        },
+        price: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+        category: {
+            type: String,
+            default: 'general',
+            trim: true
+        },
+        status: {
+            type: String,
+            enum: ['active', 'inactive', 'deleted'],
+            default: 'active'
+        },
+        createdAt: {
+            type: Date,
+            default: Date.now
+        },
+        updatedAt: {
+            type: Date,
+            default: Date.now
+        }
+    }],
+
     // Statistics
     stats: {
         totalOrders: {

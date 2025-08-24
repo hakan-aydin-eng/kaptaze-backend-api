@@ -149,6 +149,138 @@ router.get('/orders', async (req, res, next) => {
     }
 });
 
+// @route   GET /restaurant/packages
+// @desc    Get restaurant packages
+// @access  Private (Restaurant)
+router.get('/packages', async (req, res, next) => {
+    try {
+        const restaurant = await Restaurant.findOne({ ownerId: req.user._id });
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Restaurant profile not found'
+            });
+        }
+
+        // Return packages from restaurant model
+        res.json({
+            success: true,
+            data: restaurant.packages || []
+        });
+
+    } catch (error) {
+        next(error);
+    }
+});
+
+// @route   POST /restaurant/packages
+// @desc    Add new package
+// @access  Private (Restaurant)
+router.post('/packages', [
+    body('name').trim().isLength({ min: 1, max: 100 }),
+    body('description').optional().trim().isLength({ max: 500 }),
+    body('price').isFloat({ min: 0 }),
+    body('category').optional().trim().isLength({ max: 50 })
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                details: errors.array()
+            });
+        }
+
+        const restaurant = await Restaurant.findOne({ ownerId: req.user._id });
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Restaurant profile not found'
+            });
+        }
+
+        // Create new package
+        const newPackage = {
+            id: new Date().getTime().toString(),
+            name: req.body.name,
+            description: req.body.description || '',
+            price: req.body.price,
+            category: req.body.category || 'general',
+            status: 'active',
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+
+        if (!restaurant.packages) {
+            restaurant.packages = [];
+        }
+        restaurant.packages.push(newPackage);
+        await restaurant.save();
+
+        res.json({
+            success: true,
+            message: 'Package added successfully',
+            data: newPackage
+        });
+
+    } catch (error) {
+        next(error);
+    }
+});
+
+// @route   PATCH /restaurant/packages/:packageId
+// @desc    Update package
+// @access  Private (Restaurant)
+router.patch('/packages/:packageId', async (req, res, next) => {
+    try {
+        const { packageId } = req.params;
+        const restaurant = await Restaurant.findOne({ ownerId: req.user._id });
+        
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Restaurant profile not found'
+            });
+        }
+
+        if (!restaurant.packages) {
+            return res.status(404).json({
+                success: false,
+                error: 'Package not found'
+            });
+        }
+
+        const packageIndex = restaurant.packages.findIndex(pkg => pkg.id === packageId);
+        if (packageIndex === -1) {
+            return res.status(404).json({
+                success: false,
+                error: 'Package not found'
+            });
+        }
+
+        // Update package fields
+        const allowedUpdates = ['name', 'description', 'price', 'category', 'status'];
+        allowedUpdates.forEach(field => {
+            if (req.body[field] !== undefined) {
+                restaurant.packages[packageIndex][field] = req.body[field];
+            }
+        });
+
+        restaurant.packages[packageIndex].updatedAt = new Date();
+        await restaurant.save();
+
+        res.json({
+            success: true,
+            message: 'Package updated successfully',
+            data: restaurant.packages[packageIndex]
+        });
+
+    } catch (error) {
+        next(error);
+    }
+});
+
 // @route   GET /restaurant/stats
 // @desc    Get restaurant statistics
 // @access  Private (Restaurant)
