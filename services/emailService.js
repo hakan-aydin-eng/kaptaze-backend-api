@@ -156,13 +156,13 @@ class EmailService {
                         </div>
                         <div class="cred-item">
                             <span class="cred-label">Giriş Adresi:</span>
-                            <span class="cred-value">https://kaptaze-frontend.netlify.app/restaurant-login-v2.html</span>
+                            <span class="cred-value">https://kaptaze.com/restaurant-login.html</span>
                         </div>
                     </div>
                     
                     <p><strong>⚠️ Güvenlik Uyarısı:</strong> Bu bilgileri güvenli bir yerde saklayın ve kimseyle paylaşmayın.</p>
                     
-                    <a href="https://kaptaze-frontend.netlify.app/restaurant-login-v2.html" class="button">
+                    <a href="https://kaptaze.com/restaurant-login.html" class="button">
                         🚀 Panele Giriş Yap
                     </a>
                     
@@ -199,7 +199,7 @@ Tebrikler! ${application.businessName} işletmeniz için yaptığınız başvuru
 🔑 Giriş Bilgileriniz:
 Kullanıcı Adı: ${credentials.username}
 Şifre: ${credentials.password}
-Giriş Adresi: https://kaptaze-frontend.netlify.app/restaurant-login-v2.html
+Giriş Adresi: https://kaptaze.com/restaurant-login.html
 
 ⚠️ Bu bilgileri güvenli bir yerde saklayın ve kimseyle paylaşmayın.
 
