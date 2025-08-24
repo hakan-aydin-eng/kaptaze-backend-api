@@ -156,13 +156,13 @@ class EmailService {
                         </div>
                         <div class="cred-item">
                             <span class="cred-label">Giriş Adresi:</span>
-                            <span class="cred-value">https://kaptaze.com/restaurant-login.html</span>
+                            <span class="cred-value">https://kaptaze-frontend.netlify.app/restaurant-login.html</span>
                         </div>
                     </div>
                     
                     <p><strong>⚠️ Güvenlik Uyarısı:</strong> Bu bilgileri güvenli bir yerde saklayın ve kimseyle paylaşmayın.</p>
                     
-                    <a href="https://kaptaze.com/restaurant-login.html" class="button">
+                    <a href="https://kaptaze-frontend.netlify.app/restaurant-login.html" class="button">
                         🚀 Panele Giriş Yap
                     </a>
                     
@@ -199,7 +199,7 @@ Tebrikler! ${application.businessName} işletmeniz için yaptığınız başvuru
 🔑 Giriş Bilgileriniz:
 Kullanıcı Adı: ${credentials.username}
 Şifre: ${credentials.password}
-Giriş Adresi: https://kaptaze.com/restaurant-login.html
+Giriş Adresi: https://kaptaze-frontend.netlify.app/restaurant-login.html
 
 ⚠️ Bu bilgileri güvenli bir yerde saklayın ve kimseyle paylaşmayın.
 
@@ -259,7 +259,7 @@ Bu e-posta otomatik olarak gönderilmiştir.
                     <h4>🔄 Tekrar Başvuru</h4>
                     <p>Gerekli düzeltmeleri yaptıktan sonra tekrar başvuruda bulunabilirsiniz. Başvuru sürecinde size yardımcı olmaktan memnuniyet duyarız.</p>
                     
-                    <a href="https://kaptaze.com/customer-registration.html" class="button">
+                    <a href="https://kaptaze-frontend.netlify.app/customer-registration-v2.html" class="button">
                         📝 Yeni Başvuru Yap
                     </a>
                     
@@ -290,7 +290,7 @@ ${reason}
 
 🔄 Gerekli düzeltmeleri yaptıktan sonra tekrar başvuruda bulunabilirsiniz.
 
-Yeni başvuru: https://kaptaze.com/customer-registration.html
+Yeni başvuru: https://kaptaze-frontend.netlify.app/customer-registration-v2.html
 
 Saygılarımızla,
 KapTaze Ekibi

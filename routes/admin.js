@@ -254,15 +254,31 @@ router.post('/applications/:applicationId/approve', [
         console.log(`✅ Application approved: ${application.applicationId} - ${application.businessName}`);
 
         // Send approval email with credentials
+        let emailStatus = { sent: false, error: null };
         try {
-            await emailService.sendApplicationApprovalEmail(application, {
+            const emailResult = await emailService.sendApplicationApprovalEmail(application, {
                 username: finalUsername,
                 password: finalPassword
             });
-            console.log(`📧 Approval email sent to: ${application.email}`);
+            
+            if (emailResult.success) {
+                console.log(`📧 Approval email sent successfully to: ${application.email}`);
+                emailStatus = { sent: true, messageId: emailResult.messageId };
+                
+                // Update application with email status
+                application.emailSent = true;
+                application.emailSentAt = new Date();
+                application.emailMessageId = emailResult.messageId;
+                await application.save();
+            }
         } catch (emailError) {
             console.error('❌ Failed to send approval email:', emailError.message);
-            // Don't fail the approval process if email fails
+            emailStatus = { sent: false, error: emailError.message };
+            
+            // Update application with email error
+            application.emailSent = false;
+            application.emailError = emailError.message;
+            await application.save();
         }
 
         res.json({
@@ -284,7 +300,8 @@ router.post('/applications/:applicationId/approve', [
                     id: restaurantUser._id,
                     username: restaurantUser.username,
                     email: restaurantUser.email
-                }
+                },
+                emailStatus: emailStatus
             }
         });
 

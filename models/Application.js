@@ -136,6 +136,15 @@ const applicationSchema = new mongoose.Schema({
     notes: String,
     adminNotes: String,
     
+    // Email tracking
+    emailSent: {
+        type: Boolean,
+        default: false
+    },
+    emailSentAt: Date,
+    emailMessageId: String,
+    emailError: String,
+    
     // Source tracking
     source: {
         type: String,
