@@ -50,7 +50,7 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Rate Limiting (more generous limits)
+// Rate Limiting (TEMPORARILY DISABLED FOR DEVELOPMENT)
 const limiter = rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
     max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000, // Increased from 100 to 1000 requests per windowMs
@@ -63,7 +63,7 @@ const limiter = rateLimit({
     // Skip rate limiting for health check
     skip: (req) => req.path === '/health'
 });
-app.use(limiter);
+// app.use(limiter);  // TEMPORARILY DISABLED FOR TESTING
 
 // Body Parser Middleware
 app.use(express.json({ limit: '10mb' }));
