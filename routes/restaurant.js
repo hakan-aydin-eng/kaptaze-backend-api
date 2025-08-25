@@ -200,13 +200,19 @@ router.post('/packages', [
             });
         }
 
-        // Create new package
+        // Create new package with all fields
         const newPackage = {
             id: new Date().getTime().toString(),
             name: req.body.name,
             description: req.body.description || '',
             price: req.body.price,
+            originalPrice: req.body.originalPrice,
+            discountedPrice: req.body.discountedPrice || req.body.price,
+            quantity: req.body.quantity || 1,
             category: req.body.category || 'general',
+            tags: req.body.tags || [],
+            availableUntil: req.body.availableUntil ? new Date(req.body.availableUntil) : null,
+            specialInstructions: req.body.specialInstructions || '',
             status: 'active',
             createdAt: new Date(),
             updatedAt: new Date()
