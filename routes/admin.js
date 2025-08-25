@@ -560,6 +560,95 @@ router.patch('/users/:userId', [
     }
 });
 
+// @route   GET /admin/packages
+// @desc    Get all restaurant packages for admin dashboard
+// @access  Private (Admin)
+router.get('/packages', async (req, res, next) => {
+    try {
+        const { restaurant, status, category, page = 1, limit = 50 } = req.query;
+
+        // Build filter for restaurants
+        const restaurantFilter = {};
+        if (restaurant) {
+            restaurantFilter.name = { $regex: restaurant, $options: 'i' };
+        }
+
+        // Get all restaurants with packages
+        const restaurants = await Restaurant.find(restaurantFilter)
+            .populate('ownerId', 'firstName lastName email')
+            .select('name category address ownerId packages');
+
+        // Aggregate all packages with restaurant info
+        let allPackages = [];
+        
+        restaurants.forEach(restaurant => {
+            if (restaurant.packages && restaurant.packages.length > 0) {
+                restaurant.packages.forEach(pkg => {
+                    // Apply filters
+                    if (status && pkg.status !== status) return;
+                    if (category && pkg.category !== category) return;
+
+                    allPackages.push({
+                        // Package info
+                        packageId: pkg.id,
+                        name: pkg.name,
+                        description: pkg.description,
+                        price: pkg.price,
+                        originalPrice: pkg.originalPrice,
+                        discountedPrice: pkg.discountedPrice,
+                        quantity: pkg.quantity,
+                        category: pkg.category,
+                        tags: pkg.tags,
+                        status: pkg.status,
+                        availableUntil: pkg.availableUntil,
+                        createdAt: pkg.createdAt,
+                        
+                        // Restaurant info
+                        restaurant: {
+                            id: restaurant._id,
+                            name: restaurant.name,
+                            category: restaurant.category,
+                            address: restaurant.address,
+                            owner: restaurant.ownerId ? {
+                                name: `${restaurant.ownerId.firstName || ''} ${restaurant.ownerId.lastName || ''}`.trim(),
+                                email: restaurant.ownerId.email
+                            } : null
+                        }
+                    });
+                });
+            }
+        });
+
+        // Sort by creation date (newest first)
+        allPackages.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        // Pagination
+        const skip = (page - 1) * limit;
+        const paginatedPackages = allPackages.slice(skip, skip + parseInt(limit));
+
+        res.json({
+            success: true,
+            data: {
+                packages: paginatedPackages,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total: allPackages.length,
+                    pages: Math.ceil(allPackages.length / limit)
+                },
+                summary: {
+                    totalPackages: allPackages.length,
+                    activePackages: allPackages.filter(p => p.status === 'active').length,
+                    totalRestaurants: restaurants.length
+                }
+            }
+        });
+
+    } catch (error) {
+        next(error);
+    }
+});
+
 // Helper functions
 function generateUsername(businessName) {
     const cleaned = businessName
