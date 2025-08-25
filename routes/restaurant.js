@@ -8,8 +8,42 @@ const { body, validationResult } = require('express-validator');
 const { authenticate, authorize } = require('../middleware/auth');
 const Restaurant = require('../models/Restaurant');
 const User = require('../models/User');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 const router = express.Router();
+
+// Configure multer for image upload
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadDir = path.join(__dirname, '../uploads/restaurant-images');
+        // Create directory if it doesn't exist
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, `restaurant-${req.user._id}-${uniqueSuffix}${path.extname(file.originalname)}`);
+    }
+});
+
+const upload = multer({
+    storage: storage,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB limit
+    },
+    fileFilter: (req, file, cb) => {
+        // Check file type
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only image files are allowed!'), false);
+        }
+    }
+});
 
 // All restaurant routes require authentication and restaurant role
 router.use(authenticate);
@@ -283,6 +317,58 @@ router.patch('/packages/:packageId', async (req, res, next) => {
         });
 
     } catch (error) {
+        next(error);
+    }
+});
+
+// @route   POST /restaurant/profile/image
+// @desc    Upload restaurant profile image
+// @access  Private (Restaurant)
+router.post('/profile/image', upload.single('image'), async (req, res, next) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                error: 'No image file provided'
+            });
+        }
+
+        const restaurant = await Restaurant.findOne({ ownerId: req.user._id });
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Restaurant profile not found'
+            });
+        }
+
+        // Delete old image if exists
+        if (restaurant.profileImage) {
+            const oldImagePath = path.join(__dirname, '../uploads/restaurant-images', path.basename(restaurant.profileImage));
+            if (fs.existsSync(oldImagePath)) {
+                fs.unlinkSync(oldImagePath);
+            }
+        }
+
+        // Save new image path (store relative path)
+        restaurant.profileImage = `/uploads/restaurant-images/${req.file.filename}`;
+        restaurant.lastActivity = new Date();
+        await restaurant.save();
+
+        res.json({
+            success: true,
+            message: 'Profile image uploaded successfully',
+            data: {
+                imageUrl: restaurant.profileImage
+            }
+        });
+
+    } catch (error) {
+        if (error.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({
+                success: false,
+                error: 'File size too large. Maximum size is 5MB.'
+            });
+        }
         next(error);
     }
 });

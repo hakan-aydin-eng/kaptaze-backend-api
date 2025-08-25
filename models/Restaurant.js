@@ -157,6 +157,10 @@ const restaurantSchema = new mongoose.Schema({
         cover: String,
         gallery: [String]
     },
+    profileImage: {
+        type: String,
+        trim: true
+    },
     
     // Social Media
     socialMedia: {
