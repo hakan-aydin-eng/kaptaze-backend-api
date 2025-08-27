@@ -11,6 +11,7 @@ const Application = require('../models/Application');
 const Restaurant = require('../models/Restaurant');
 const User = require('../models/User');
 const Consumer = require('../models/Consumer');
+const Package = require('../models/Package');
 const EmailService = require('../services/emailService');
 
 const router = express.Router();
@@ -963,6 +964,272 @@ function generateUsername(businessName) {
         .substring(0, 8);
     return cleaned + Math.floor(Math.random() * 1000);
 }
+
+// @route   GET /admin/packages
+// @desc    Get all packages with filtering and pagination
+// @access  Private (Admin)
+router.get('/packages', [
+    query('status').optional().isIn(['active', 'inactive', 'sold_out', 'expired', 'all']),
+    query('restaurant').optional().isMongoId(),
+    query('category').optional().trim(),
+    query('search').optional().trim(),
+    query('page').optional().isInt({ min: 1 }).toInt(),
+    query('limit').optional().isInt({ min: 1, max: 100 }).toInt()
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid query parameters',
+                details: errors.array()
+            });
+        }
+
+        const { 
+            status = 'all', 
+            restaurant,
+            category,
+            search = '', 
+            page = 1, 
+            limit = 20 
+        } = req.query;
+
+        // Build filter
+        const filter = {};
+        
+        if (status !== 'all') {
+            filter.status = status;
+        }
+        
+        if (restaurant) {
+            filter.restaurant = restaurant;
+        }
+        
+        if (category) {
+            filter.category = new RegExp(category, 'i');
+        }
+        
+        if (search) {
+            filter.$or = [
+                { name: new RegExp(search, 'i') },
+                { description: new RegExp(search, 'i') },
+                { restaurantName: new RegExp(search, 'i') }
+            ];
+        }
+
+        // Execute queries
+        const [packages, total] = await Promise.all([
+            Package.find(filter)
+                .populate('restaurant', 'name category phone email')
+                .sort({ createdAt: -1 })
+                .limit(limit * 1)
+                .skip((page - 1) * limit)
+                .lean(),
+            Package.countDocuments(filter)
+        ]);
+
+        // Calculate pagination
+        const totalPages = Math.ceil(total / limit);
+        const hasNextPage = page < totalPages;
+        const hasPrevPage = page > 1;
+
+        // Package statistics
+        const stats = await Package.aggregate([
+            {
+                $group: {
+                    _id: '$status',
+                    count: { $sum: 1 },
+                    totalValue: { $sum: '$originalPrice' },
+                    totalDiscounted: { $sum: '$discountedPrice' }
+                }
+            }
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                packages,
+                pagination: {
+                    current: page,
+                    pages: totalPages,
+                    total,
+                    hasNext: hasNextPage,
+                    hasPrev: hasPrevPage
+                },
+                stats: {
+                    total,
+                    byStatus: stats.reduce((acc, stat) => {
+                        acc[stat._id] = stat.count;
+                        return acc;
+                    }, {})
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching packages:', error);
+        next(error);
+    }
+});
+
+// @route   GET /admin/consumers
+// @desc    Get all consumers with filtering and pagination  
+// @access  Private (Admin)
+router.get('/consumers', [
+    query('status').optional().isIn(['active', 'inactive', 'banned', 'all']),
+    query('search').optional().trim(),
+    query('page').optional().isInt({ min: 1 }).toInt(),
+    query('limit').optional().isInt({ min: 1, max: 100 }).toInt()
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid query parameters',
+                details: errors.array()
+            });
+        }
+
+        const { 
+            status = 'all',
+            search = '', 
+            page = 1, 
+            limit = 20 
+        } = req.query;
+
+        // Build filter
+        const filter = {};
+        
+        if (status !== 'all') {
+            filter.status = status;
+        }
+        
+        if (search) {
+            filter.$or = [
+                { firstName: new RegExp(search, 'i') },
+                { lastName: new RegExp(search, 'i') },
+                { email: new RegExp(search, 'i') },
+                { phone: new RegExp(search, 'i') }
+            ];
+        }
+
+        // Execute queries
+        const [consumers, total] = await Promise.all([
+            Consumer.find(filter)
+                .select('-password') // Exclude password field
+                .sort({ createdAt: -1 })
+                .limit(limit * 1)
+                .skip((page - 1) * limit)
+                .lean(),
+            Consumer.countDocuments(filter)
+        ]);
+
+        // Calculate pagination
+        const totalPages = Math.ceil(total / limit);
+        const hasNextPage = page < totalPages;
+        const hasPrevPage = page > 1;
+
+        res.json({
+            success: true,
+            data: {
+                consumers,
+                pagination: {
+                    current: page,
+                    pages: totalPages,
+                    total,
+                    hasNext: hasNextPage,
+                    hasPrev: hasPrevPage
+                },
+                stats: {
+                    total
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching consumers:', error);
+        next(error);
+    }
+});
+
+// @route   GET /admin/stats
+// @desc    Get admin dashboard statistics
+// @access  Private (Admin)
+router.get('/stats', async (req, res, next) => {
+    try {
+        // Get counts for different models
+        const [
+            totalApplications,
+            pendingApplications,
+            approvedApplications,
+            totalRestaurants,
+            activeRestaurants,
+            totalPackages,
+            activePackages,
+            totalConsumers,
+            activeConsumers
+        ] = await Promise.all([
+            Application.countDocuments(),
+            Application.countDocuments({ status: 'pending' }),
+            Application.countDocuments({ status: 'approved' }),
+            Restaurant.countDocuments(),
+            Restaurant.countDocuments({ status: 'approved' }),
+            Package.countDocuments(),
+            Package.countDocuments({ status: 'active' }),
+            Consumer.countDocuments(),
+            Consumer.countDocuments({ status: 'active' })
+        ]);
+
+        // Get recent activity
+        const recentApplications = await Application.find()
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .select('firstName lastName businessName status createdAt')
+            .lean();
+
+        const recentPackages = await Package.find()
+            .populate('restaurant', 'name')
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .select('name restaurantName originalPrice discountedPrice status createdAt')
+            .lean();
+
+        res.json({
+            success: true,
+            data: {
+                overview: {
+                    applications: {
+                        total: totalApplications,
+                        pending: pendingApplications,
+                        approved: approvedApplications
+                    },
+                    restaurants: {
+                        total: totalRestaurants,
+                        active: activeRestaurants
+                    },
+                    packages: {
+                        total: totalPackages,
+                        active: activePackages
+                    },
+                    consumers: {
+                        total: totalConsumers,
+                        active: activeConsumers
+                    }
+                },
+                recent: {
+                    applications: recentApplications,
+                    packages: recentPackages
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching admin stats:', error);
+        next(error);
+    }
+});
 
 function generatePassword() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
