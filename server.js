@@ -34,11 +34,19 @@ const corsOptions = {
     origin: process.env.FRONTEND_URLS?.split(',') || [
         'http://localhost:3000',
         'https://kaptaze.com',
-        'https://kaptaze.netlify.app'
+        'https://kaptaze.netlify.app',
+        'https://www.kaptaze.com'
     ],
     credentials: true,
     optionsSuccessStatus: 200
 };
+
+// Temporary: Allow all origins for development - REMOVE IN PRODUCTION
+if (process.env.NODE_ENV !== 'production') {
+    corsOptions.origin = '*';
+    corsOptions.credentials = false;
+}
+
 app.use(cors(corsOptions));
 
 // Health Check Endpoint (before rate limiting)
