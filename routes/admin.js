@@ -10,6 +10,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const Application = require('../models/Application');
 const Restaurant = require('../models/Restaurant');
 const User = require('../models/User');
+const Consumer = require('../models/Consumer');
 const EmailService = require('../services/emailService');
 
 const router = express.Router();
@@ -645,6 +646,311 @@ router.get('/packages', async (req, res, next) => {
         });
 
     } catch (error) {
+        next(error);
+    }
+});
+
+// @route   GET /admin/consumers
+// @desc    Get all mobile app consumers for admin panel
+// @access  Private (Admin)
+router.get('/consumers', [
+    query('status').optional().isIn(['active', 'inactive', 'suspended', 'all']),
+    query('search').optional().trim(),
+    query('page').optional().isInt({ min: 1 }).toInt(),
+    query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
+    query('sortBy').optional().isIn(['name', 'email', 'registrationDate', 'lastActivity', 'orderCount', 'totalSpent']),
+    query('sortOrder').optional().isIn(['asc', 'desc'])
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid query parameters',
+                details: errors.array()
+            });
+        }
+
+        const { 
+            status = 'all', 
+            search = '', 
+            page = 1, 
+            limit = 50,
+            sortBy = 'createdAt',
+            sortOrder = 'desc'
+        } = req.query;
+
+        console.log(`📊 Admin requesting consumers - Status: ${status}, Search: "${search}", Page: ${page}`);
+
+        // Build filter
+        const filter = {};
+        if (status !== 'all') {
+            filter.status = status;
+        }
+
+        if (search) {
+            filter.$or = [
+                { name: { $regex: search, $options: 'i' } },
+                { surname: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } },
+                { phone: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        // Build sort object
+        const sortField = sortBy === 'registrationDate' ? 'createdAt' : sortBy;
+        const sort = {};
+        sort[sortField] = sortOrder === 'asc' ? 1 : -1;
+
+        // Get consumers with pagination
+        const skip = (page - 1) * limit;
+        const consumers = await Consumer.find(filter)
+            .select('-password -passwordResetToken -emailVerificationToken') // Exclude sensitive fields
+            .sort(sort)
+            .skip(skip)
+            .limit(parseInt(limit));
+
+        const total = await Consumer.countDocuments(filter);
+
+        // Calculate statistics
+        const stats = await Consumer.aggregate([
+            { $match: filter },
+            {
+                $group: {
+                    _id: null,
+                    totalConsumers: { $sum: 1 },
+                    activeConsumers: {
+                        $sum: { $cond: [{ $eq: ["$status", "active"] }, 1, 0] }
+                    },
+                    totalOrders: { $sum: "$orderCount" },
+                    totalSpending: { $sum: "$totalSpent" },
+                    avgOrdersPerConsumer: { $avg: "$orderCount" },
+                    avgSpendingPerConsumer: { $avg: "$totalSpent" }
+                }
+            }
+        ]);
+
+        const statistics = stats[0] || {
+            totalConsumers: 0,
+            activeConsumers: 0,
+            totalOrders: 0,
+            totalSpending: 0,
+            avgOrdersPerConsumer: 0,
+            avgSpendingPerConsumer: 0
+        };
+
+        // Get recent registrations (last 30 days)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const recentRegistrations = await Consumer.countDocuments({
+            createdAt: { $gte: thirtyDaysAgo },
+            ...(status !== 'all' && { status })
+        });
+
+        console.log(`✅ Found ${consumers.length} consumers (total: ${total})`);
+
+        res.json({
+            success: true,
+            data: {
+                consumers,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    pages: Math.ceil(total / limit)
+                },
+                statistics: {
+                    ...statistics,
+                    recentRegistrations
+                },
+                filters: {
+                    status,
+                    search,
+                    sortBy,
+                    sortOrder
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Admin consumers query error:', error);
+        next(error);
+    }
+});
+
+// @route   GET /admin/consumers/:consumerId
+// @desc    Get specific consumer details
+// @access  Private (Admin)
+router.get('/consumers/:consumerId', async (req, res, next) => {
+    try {
+        const { consumerId } = req.params;
+
+        const consumer = await Consumer.findById(consumerId)
+            .select('-password -passwordResetToken -emailVerificationToken')
+            .populate('favoriteRestaurants', 'name category address');
+
+        if (!consumer) {
+            return res.status(404).json({
+                success: false,
+                error: 'Consumer not found'
+            });
+        }
+
+        // Get consumer's order history (if Order model exists)
+        let orders = [];
+        try {
+            const Order = require('../models/Order');
+            orders = await Order.find({ consumerId: consumer._id })
+                .populate('restaurantId', 'name category')
+                .sort({ createdAt: -1 })
+                .limit(20); // Last 20 orders
+        } catch (orderError) {
+            console.log('Orders not found or model not available');
+        }
+
+        res.json({
+            success: true,
+            data: {
+                consumer,
+                orders,
+                summary: {
+                    totalOrders: consumer.orderCount,
+                    totalSpent: consumer.totalSpent,
+                    avgOrderValue: consumer.orderCount > 0 ? consumer.totalSpent / consumer.orderCount : 0,
+                    favoriteRestaurants: consumer.favoriteRestaurants?.length || 0,
+                    accountAge: Math.floor((Date.now() - consumer.createdAt) / (1000 * 60 * 60 * 24)) // days
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Admin consumer detail error:', error);
+        next(error);
+    }
+});
+
+// @route   PATCH /admin/consumers/:consumerId
+// @desc    Update consumer status and admin notes
+// @access  Private (Admin)
+router.patch('/consumers/:consumerId', [
+    body('status').optional().isIn(['active', 'inactive', 'suspended']),
+    body('adminNotes').optional().trim().isLength({ max: 500 }),
+    body('orderCount').optional().isInt({ min: 0 }),
+    body('totalSpent').optional().isFloat({ min: 0 })
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                details: errors.array()
+            });
+        }
+
+        const { consumerId } = req.params;
+        const { status, adminNotes, orderCount, totalSpent } = req.body;
+
+        const consumer = await Consumer.findById(consumerId);
+        if (!consumer) {
+            return res.status(404).json({
+                success: false,
+                error: 'Consumer not found'
+            });
+        }
+
+        // Update fields if provided
+        if (status !== undefined) consumer.status = status;
+        if (adminNotes !== undefined) consumer.adminNotes = adminNotes;
+        if (orderCount !== undefined) consumer.orderCount = orderCount;
+        if (totalSpent !== undefined) consumer.totalSpent = totalSpent;
+        
+        // Track who made the changes
+        consumer.lastUpdatedBy = req.user._id;
+        consumer.lastUpdatedAt = new Date();
+
+        await consumer.save();
+
+        console.log(`✅ Consumer ${consumer.name} ${consumer.surname} updated by admin ${req.user.username}`);
+
+        res.json({
+            success: true,
+            message: 'Consumer updated successfully',
+            data: {
+                consumer: {
+                    id: consumer._id,
+                    name: consumer.name,
+                    surname: consumer.surname,
+                    email: consumer.email,
+                    status: consumer.status,
+                    orderCount: consumer.orderCount,
+                    totalSpent: consumer.totalSpent,
+                    lastUpdatedAt: consumer.lastUpdatedAt
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Admin consumer update error:', error);
+        next(error);
+    }
+});
+
+// @route   DELETE /admin/consumers/:consumerId
+// @desc    Delete consumer account (soft delete)
+// @access  Private (Admin)
+router.delete('/consumers/:consumerId', [
+    body('reason')
+        .notEmpty()
+        .withMessage('Deletion reason is required')
+        .trim()
+        .isLength({ max: 500 })
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                details: errors.array()
+            });
+        }
+
+        const { consumerId } = req.params;
+        const { reason } = req.body;
+
+        const consumer = await Consumer.findById(consumerId);
+        if (!consumer) {
+            return res.status(404).json({
+                success: false,
+                error: 'Consumer not found'
+            });
+        }
+
+        // Soft delete - mark as suspended and add deletion info
+        consumer.status = 'suspended';
+        consumer.deletedAt = new Date();
+        consumer.deletedBy = req.user._id;
+        consumer.deletionReason = reason;
+        consumer.adminNotes = (consumer.adminNotes || '') + `\n[${new Date().toISOString()}] Account suspended by admin: ${reason}`;
+
+        await consumer.save();
+
+        console.log(`🗑️ Consumer ${consumer.name} ${consumer.surname} suspended by admin: ${reason}`);
+
+        res.json({
+            success: true,
+            message: 'Consumer account suspended successfully',
+            data: {
+                consumerId: consumer._id,
+                name: `${consumer.name} ${consumer.surname}`,
+                email: consumer.email,
+                reason
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Admin consumer deletion error:', error);
         next(error);
     }
 });

@@ -7,18 +7,28 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
+const Consumer = require('../models/Consumer');
 const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
 // Generate JWT Token
-const generateToken = (user) => {
+const generateToken = (user, userType = 'user') => {
+    const payload = { 
+        id: user._id, 
+        userType: userType // 'user' for admin/restaurant, 'consumer' for mobile app users
+    };
+    
+    // Add role for system users, email for consumers
+    if (userType === 'user') {
+        payload.role = user.role;
+        payload.username = user.username;
+    } else {
+        payload.email = user.email;
+    }
+    
     return jwt.sign(
-        { 
-            id: user._id, 
-            role: user.role,
-            username: user.username 
-        },
+        payload,
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
@@ -256,6 +266,200 @@ router.post('/refresh', authenticate, (req, res) => {
         message: 'Token refreshed successfully',
         data: { token }
     });
+});
+
+// @route   POST /auth/register
+// @desc    Mobile app consumer registration
+// @access  Public
+router.post('/register', [
+    body('name')
+        .notEmpty()
+        .withMessage('Name is required')
+        .isLength({ min: 2, max: 50 })
+        .withMessage('Name must be between 2 and 50 characters')
+        .matches(/^[a-zA-ZğüşıöçĞÜŞIÖÇ\s]+$/)
+        .withMessage('Name can only contain letters'),
+    body('surname')
+        .notEmpty()
+        .withMessage('Surname is required')
+        .isLength({ min: 2, max: 50 })
+        .withMessage('Surname must be between 2 and 50 characters')
+        .matches(/^[a-zA-ZğüşıöçĞÜŞIÖÇ\s]+$/)
+        .withMessage('Surname can only contain letters'),
+    body('email')
+        .isEmail()
+        .withMessage('Please enter a valid email address')
+        .normalizeEmail()
+        .isLength({ max: 100 })
+        .withMessage('Email cannot exceed 100 characters'),
+    body('phone')
+        .optional()
+        .matches(/^(\+90|0)?[5][0-9]{9}$/)
+        .withMessage('Please enter a valid Turkish phone number'),
+    body('password')
+        .isLength({ min: 6, max: 128 })
+        .withMessage('Password must be between 6 and 128 characters')
+], async (req, res, next) => {
+    try {
+        // Check for validation errors
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const { name, surname, email, phone, password } = req.body;
+
+        // Check if consumer already exists
+        const existingConsumer = await Consumer.findOne({ 
+            email: email.toLowerCase() 
+        });
+
+        if (existingConsumer) {
+            return res.status(409).json({
+                success: false,
+                error: 'A user with this email already exists'
+            });
+        }
+
+        // Create new consumer
+        const consumer = new Consumer({
+            name: name.trim(),
+            surname: surname.trim(),
+            email: email.toLowerCase(),
+            phone: phone ? phone.trim() : undefined,
+            password: password,
+            status: 'active',
+            emailVerified: false // In production, send verification email
+        });
+
+        await consumer.save();
+
+        // Generate token
+        const token = generateToken(consumer, 'consumer');
+
+        // Log successful registration
+        console.log(`🎉 New consumer registered: ${consumer.name} ${consumer.surname} (${consumer.email})`);
+
+        res.status(201).json({
+            success: true,
+            message: 'Registration successful! Welcome to KapTaze!',
+            data: {
+                token,
+                consumer: {
+                    id: consumer._id,
+                    name: consumer.name,
+                    surname: consumer.surname,
+                    email: consumer.email,
+                    phone: consumer.phone,
+                    status: consumer.status,
+                    createdAt: consumer.createdAt
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Consumer registration error:', error);
+        
+        if (error.code === 11000) {
+            // Duplicate key error
+            return res.status(409).json({
+                success: false,
+                error: 'A user with this email already exists'
+            });
+        }
+        
+        if (error.name === 'ValidationError') {
+            const validationErrors = Object.values(error.errors).map(err => ({
+                field: err.path,
+                message: err.message
+            }));
+            
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                errors: validationErrors
+            });
+        }
+
+        next(error);
+    }
+});
+
+// @route   POST /auth/login
+// @desc    Mobile app consumer login
+// @access  Public
+router.post('/login', [
+    body('email')
+        .isEmail()
+        .withMessage('Please enter a valid email address')
+        .normalizeEmail(),
+    body('password')
+        .notEmpty()
+        .withMessage('Password is required')
+], async (req, res, next) => {
+    try {
+        // Check for validation errors
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const { email, password } = req.body;
+
+        // Find consumer and verify credentials
+        const consumer = await Consumer.findByCredentials(email, password);
+
+        // Generate token
+        const token = generateToken(consumer, 'consumer');
+
+        console.log(`✅ Consumer login: ${consumer.name} ${consumer.surname} (${consumer.email})`);
+
+        res.json({
+            success: true,
+            message: 'Login successful',
+            data: {
+                token,
+                consumer: {
+                    id: consumer._id,
+                    name: consumer.name,
+                    surname: consumer.surname,
+                    email: consumer.email,
+                    phone: consumer.phone,
+                    status: consumer.status,
+                    lastActivity: consumer.lastActivity,
+                    orderCount: consumer.orderCount,
+                    totalSpent: consumer.totalSpent
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Consumer login error:', error);
+        
+        if (error.message === 'Invalid credentials') {
+            return res.status(401).json({
+                success: false,
+                error: 'Invalid email or password'
+            });
+        }
+        
+        if (error.message.includes('Account locked')) {
+            return res.status(423).json({
+                success: false,
+                error: 'Account locked due to too many failed login attempts. Please try again later.'
+            });
+        }
+
+        next(error);
+    }
 });
 
 module.exports = router;

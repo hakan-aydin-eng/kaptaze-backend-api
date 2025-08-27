@@ -4,6 +4,7 @@
 
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Consumer = require('../models/Consumer');
 
 // Verify JWT Token
 const authenticate = async (req, res, next) => {
@@ -22,8 +23,22 @@ const authenticate = async (req, res, next) => {
         try {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
             
-            // Get user from database
-            const user = await User.findById(decoded.id).select('-password');
+            let user;
+            
+            // Check if token is for consumer or system user
+            if (decoded.userType === 'consumer') {
+                // Get consumer from database
+                user = await Consumer.findById(decoded.id).select('-password');
+                if (user) {
+                    user.userType = 'consumer'; // Add userType for identification
+                }
+            } else {
+                // Get system user (admin/restaurant) from database
+                user = await User.findById(decoded.id).select('-password');
+                if (user) {
+                    user.userType = 'user'; // Add userType for identification
+                }
+            }
             
             if (!user) {
                 return res.status(401).json({
