@@ -34,7 +34,7 @@ const corsOptions = {
     origin: process.env.FRONTEND_URLS?.split(',') || [
         'http://localhost:3000',
         'https://kaptaze.com',
-        'https://kaptaze.netlify.app',
+        'https://https://kaptaze.com/',
         'https://www.kaptaze.com'
     ],
     credentials: true,
