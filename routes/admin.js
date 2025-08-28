@@ -1270,6 +1270,104 @@ function generatePassword() {
     return password;
 }
 
+// @route   GET /admin/restaurants
+// @desc    Get all restaurants (from approved applications)
+// @access  Private (Admin)
+router.get('/restaurants', [
+    query('status').optional().isIn(['active', 'inactive', 'suspended', 'all']),
+    query('search').optional().trim(),
+    query('page').optional().isInt({ min: 1 }).toInt(),
+    query('limit').optional().isInt({ min: 1, max: 100 }).toInt()
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                details: errors.array()
+            });
+        }
+
+        const {
+            status = 'all',
+            search = '',
+            page = 1,
+            limit = 20
+        } = req.query;
+
+        // Build query
+        let query = {};
+
+        // Status filter
+        if (status !== 'all') {
+            query.status = status;
+        }
+
+        // Search filter
+        if (search) {
+            query.$or = [
+                { name: { $regex: search, $options: 'i' } },
+                { category: { $regex: search, $options: 'i' } },
+                { 'owner.firstName': { $regex: search, $options: 'i' } },
+                { 'owner.lastName': { $regex: search, $options: 'i' } },
+                { 'owner.email': { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        // Get restaurants with pagination
+        const skip = (page - 1) * limit;
+        const restaurants = await Restaurant.find(query)
+            .populate('applicationId', 'applicationId businessName firstName lastName email phone businessCategory city district createdAt')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        // Get total count for pagination
+        const total = await Restaurant.countDocuments(query);
+
+        const result = restaurants.map(restaurant => ({
+            _id: restaurant._id,
+            name: restaurant.name,
+            category: restaurant.category,
+            email: restaurant.email,
+            phone: restaurant.phone,
+            address: restaurant.address,
+            owner: restaurant.owner,
+            status: restaurant.status,
+            isVerified: restaurant.isVerified,
+            createdAt: restaurant.createdAt,
+            updatedAt: restaurant.updatedAt,
+            application: restaurant.applicationId ? {
+                applicationId: restaurant.applicationId.applicationId,
+                businessName: restaurant.applicationId.businessName,
+                submittedAt: restaurant.applicationId.createdAt
+            } : null,
+            stats: {
+                totalPackages: restaurant.packages?.length || 0,
+                activePackages: restaurant.packages?.filter(pkg => pkg.status === 'active').length || 0
+            }
+        }));
+
+        res.json({
+            success: true,
+            data: {
+                restaurants: result,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    pages: Math.ceil(total / limit)
+                },
+                filters: { status, search }
+            }
+        });
+
+    } catch (error) {
+        next(error);
+    }
+});
+
 // @route   POST /admin/send-email  
 // @desc    Send email via SendGrid (CORS proxy)
 // @access  Private (Admin only)
