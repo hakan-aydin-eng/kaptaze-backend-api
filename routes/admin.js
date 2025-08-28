@@ -1270,4 +1270,56 @@ function generatePassword() {
     return password;
 }
 
+// @route   POST /admin/send-email  
+// @desc    Send email via SendGrid (CORS proxy)
+// @access  Private (Admin only)
+router.post('/send-email', async (req, res, next) => {
+    try {
+        const { emailData } = req.body;
+        
+        if (!emailData) {
+            return res.status(400).json({
+                success: false,
+                error: 'Email data is required'
+            });
+        }
+
+        // SendGrid API call from backend (no CORS issues)
+        const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${process.env.SENDGRID_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(emailData)
+        });
+
+        if (response.ok) {
+            const messageId = response.headers.get('X-Message-Id');
+            res.json({
+                success: true,
+                messageId: messageId || 'sent-' + Date.now(),
+                status: response.status
+            });
+        } else {
+            const errorText = await response.text();
+            console.error('SendGrid API error:', errorText);
+            
+            res.status(response.status).json({
+                success: false,
+                error: `SendGrid API error: ${response.status}`,
+                details: errorText
+            });
+        }
+
+    } catch (error) {
+        console.error('Email proxy error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Email sending failed',
+            details: error.message
+        });
+    }
+});
+
 module.exports = router;
