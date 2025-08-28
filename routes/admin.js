@@ -23,6 +23,18 @@ const emailService = new EmailService();
 router.use(authenticate);
 router.use(authorize('admin'));
 
+// @route   GET /admin/test
+// @desc    Test admin API connection
+// @access  Private (Admin)
+router.get('/test', (req, res) => {
+    res.json({
+        success: true,
+        message: 'Admin API is working!',
+        user: req.user,
+        timestamp: new Date().toISOString()
+    });
+});
+
 // @route   GET /admin/applications
 // @desc    Get all applications with filtering and pagination
 // @access  Private (Admin)
