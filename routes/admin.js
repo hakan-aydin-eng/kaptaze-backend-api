@@ -200,6 +200,15 @@ router.post('/applications/:applicationId/approve', [
             });
         }
 
+        // Handle createdBy field for demo admin
+        const mongoose = require('mongoose');
+        let createdByValue = req.user._id;
+        
+        // If demo admin (string ID), convert to ObjectId or use null
+        if (typeof req.user._id === 'string' && req.user._id.startsWith('admin-')) {
+            createdByValue = null; // Or create a default admin ObjectId
+        }
+
         // Create restaurant user
         const restaurantUser = new User({
             firstName: application.firstName,
@@ -210,7 +219,7 @@ router.post('/applications/:applicationId/approve', [
             password: finalPassword,
             role: 'restaurant',
             status: 'active',
-            createdBy: req.user._id
+            createdBy: createdByValue
         });
 
         await restaurantUser.save();
@@ -240,7 +249,7 @@ router.post('/applications/:applicationId/approve', [
             },
             applicationId: application._id,
             ownerId: restaurantUser._id,
-            createdBy: req.user._id,
+            createdBy: createdByValue,
             status: 'active'
         });
 
@@ -252,7 +261,7 @@ router.post('/applications/:applicationId/approve', [
 
         // Update application
         application.status = 'approved';
-        application.reviewedBy = req.user._id;
+        application.reviewedBy = createdByValue;
         application.reviewedAt = new Date();
         application.restaurantId = restaurant._id;
         application.userId = restaurantUser._id;
@@ -364,9 +373,18 @@ router.post('/applications/:applicationId/reject', [
             });
         }
 
+        // Handle createdBy field for demo admin (same as approve endpoint)
+        const mongoose = require('mongoose');
+        let createdByValue = req.user._id;
+        
+        // If demo admin (string ID), convert to ObjectId or use null
+        if (typeof req.user._id === 'string' && req.user._id.startsWith('admin-')) {
+            createdByValue = null;
+        }
+
         // Update application
         application.status = 'rejected';
-        application.reviewedBy = req.user._id;
+        application.reviewedBy = createdByValue;
         application.reviewedAt = new Date();
         application.rejectionReason = reason;
 
