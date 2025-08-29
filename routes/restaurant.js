@@ -11,27 +11,13 @@ const User = require('../models/User');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const cloudinary = require('../config/cloudinary');
 
 const router = express.Router();
 
-// Configure multer for image upload
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadDir = path.join(__dirname, '../uploads/restaurant-images');
-        // Create directory if it doesn't exist
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, `restaurant-${req.user._id}-${uniqueSuffix}${path.extname(file.originalname)}`);
-    }
-});
-
+// Configure multer for memory storage (for Cloudinary)
 const upload = multer({
-    storage: storage,
+    storage: multer.memoryStorage(),
     limits: {
         fileSize: 5 * 1024 * 1024 // 5MB limit
     },
@@ -109,7 +95,7 @@ router.put('/me', [
         // Update allowed fields
         const allowedUpdates = [
             'description', 'phone', 'openingHours', 'serviceOptions', 
-            'deliveryInfo', 'socialMedia', 'settings'
+            'deliveryInfo', 'socialMedia', 'settings', 'imageUrl'
         ];
 
         allowedUpdates.forEach(field => {
@@ -322,7 +308,7 @@ router.patch('/packages/:packageId', async (req, res, next) => {
 });
 
 // @route   POST /restaurant/profile/image
-// @desc    Upload restaurant profile image
+// @desc    Upload restaurant profile image to Cloudinary
 // @access  Private (Restaurant)
 router.post('/profile/image', upload.single('image'), async (req, res, next) => {
     try {
@@ -341,16 +327,26 @@ router.post('/profile/image', upload.single('image'), async (req, res, next) => 
             });
         }
 
-        // Delete old image if exists
-        if (restaurant.profileImage) {
-            const oldImagePath = path.join(__dirname, '../uploads/restaurant-images', path.basename(restaurant.profileImage));
-            if (fs.existsSync(oldImagePath)) {
-                fs.unlinkSync(oldImagePath);
-            }
-        }
+        // Upload to Cloudinary
+        const result = await new Promise((resolve, reject) => {
+            cloudinary.uploader.upload_stream(
+                {
+                    folder: `kaptaze/restaurants/${req.user._id}`,
+                    transformation: [
+                        { width: 400, height: 400, crop: 'fill', gravity: 'face' },
+                        { quality: 'auto', format: 'auto' }
+                    ],
+                    public_id: `profile_${Date.now()}`
+                },
+                (error, result) => {
+                    if (error) reject(error);
+                    else resolve(result);
+                }
+            ).end(req.file.buffer);
+        });
 
-        // Save new image path (store relative path)
-        restaurant.profileImage = `/uploads/restaurant-images/${req.file.filename}`;
+        // Save Cloudinary URL to restaurant profile
+        restaurant.imageUrl = result.secure_url;
         restaurant.lastActivity = new Date();
         await restaurant.save();
 
@@ -358,7 +354,8 @@ router.post('/profile/image', upload.single('image'), async (req, res, next) => 
             success: true,
             message: 'Profile image uploaded successfully',
             data: {
-                imageUrl: restaurant.profileImage
+                imageUrl: result.secure_url,
+                publicId: result.public_id
             }
         });
 
@@ -369,7 +366,11 @@ router.post('/profile/image', upload.single('image'), async (req, res, next) => 
                 error: 'File size too large. Maximum size is 5MB.'
             });
         }
-        next(error);
+        console.error('Cloudinary upload error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Image upload failed'
+        });
     }
 });
 

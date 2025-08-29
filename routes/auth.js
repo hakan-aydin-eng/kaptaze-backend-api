@@ -462,4 +462,98 @@ router.post('/login', [
     }
 });
 
+// @route   PATCH /auth/profile
+// @desc    Update consumer profile
+// @access  Private (Consumer)
+router.patch('/profile', [
+    authenticate,
+    body('name')
+        .notEmpty()
+        .withMessage('Name is required')
+        .trim()
+        .isLength({ min: 2, max: 50 })
+        .withMessage('Name must be between 2-50 characters'),
+    body('surname')
+        .notEmpty()
+        .withMessage('Surname is required')
+        .trim()
+        .isLength({ min: 2, max: 50 })
+        .withMessage('Surname must be between 2-50 characters'),
+    body('email')
+        .isEmail()
+        .withMessage('Please enter a valid email address')
+        .normalizeEmail(),
+    body('phone')
+        .optional({ checkFalsy: true })
+        .matches(/^[0-9]{11}$/)
+        .withMessage('Phone number must be 11 digits')
+], async (req, res, next) => {
+    try {
+        // Check for validation errors
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const { name, surname, email, phone } = req.body;
+        const consumerId = req.user.id;
+
+        // Check if consumer exists and is the owner
+        const consumer = await Consumer.findById(consumerId);
+        if (!consumer) {
+            return res.status(404).json({
+                success: false,
+                error: 'Consumer not found'
+            });
+        }
+
+        // Check if new email is already taken by another user
+        if (email !== consumer.email) {
+            const existingConsumer = await Consumer.findOne({ email, _id: { $ne: consumerId } });
+            if (existingConsumer) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Email address is already in use'
+                });
+            }
+        }
+
+        // Update consumer profile
+        consumer.name = name.trim();
+        consumer.surname = surname.trim();
+        consumer.email = email;
+        consumer.phone = phone || null;
+        
+        await consumer.save();
+
+        console.log(`✅ Consumer profile updated: ${consumer.name} ${consumer.surname} (${consumer.email})`);
+
+        res.json({
+            success: true,
+            message: 'Profile updated successfully',
+            data: {
+                consumer: {
+                    id: consumer._id,
+                    name: consumer.name,
+                    surname: consumer.surname,
+                    email: consumer.email,
+                    phone: consumer.phone,
+                    status: consumer.status,
+                    lastActivity: consumer.lastActivity,
+                    orderCount: consumer.orderCount,
+                    totalSpent: consumer.totalSpent
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Consumer profile update error:', error);
+        next(error);
+    }
+});
+
 module.exports = router;
