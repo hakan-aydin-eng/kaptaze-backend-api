@@ -17,6 +17,11 @@ const restaurantSchema = new mongoose.Schema({
         trim: true,
         maxlength: [500, 'Description cannot exceed 500 characters']
     },
+    imageUrl: {
+        type: String,
+        trim: true,
+        maxlength: [500, 'Image URL cannot exceed 500 characters']
+    },
     category: {
         type: String,
         required: [true, 'Category is required'],
