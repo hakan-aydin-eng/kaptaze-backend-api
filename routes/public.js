@@ -215,7 +215,7 @@ router.get('/restaurants', async (req, res, next) => {
         query = query.sort({ 'rating.average': -1, 'stats.totalOrders': -1 });
 
         // Select public fields only
-        query = query.select('name description category address location rating stats serviceOptions deliveryInfo images');
+        query = query.select('name description category address location rating stats serviceOptions deliveryInfo images imageUrl profileImage');
 
         const restaurants = await query.exec();
         const total = await Restaurant.countDocuments(query.getFilter());
@@ -249,7 +249,7 @@ router.get('/restaurants/:restaurantId', async (req, res, next) => {
         const restaurant = await Restaurant.findOne({ 
             _id: restaurantId, 
             status: 'active' 
-        }).select('name description category address location rating stats serviceOptions deliveryInfo images openingHours packages');
+        }).select('name description category address location rating stats serviceOptions deliveryInfo images imageUrl profileImage openingHours packages');
 
         if (!restaurant) {
             return res.status(404).json({
@@ -309,7 +309,7 @@ router.get('/packages', async (req, res, next) => {
         }
 
         const restaurants = await Restaurant.find(restaurantFilter)
-            .select('name category address location images rating packages');
+            .select('name category address location images imageUrl profileImage rating packages');
 
         // Collect all packages with restaurant info
         let allPackages = [];
@@ -340,7 +340,9 @@ router.get('/packages', async (req, res, next) => {
                             name: restaurant.name,
                             category: restaurant.category,
                             rating: restaurant.rating?.average || 0,
-                            image: restaurant.images?.cover || restaurant.images?.logo,
+                            image: restaurant.images?.cover || restaurant.images?.logo || restaurant.imageUrl || restaurant.profileImage,
+                            imageUrl: restaurant.imageUrl,
+                            profileImage: restaurant.profileImage,
                             address: {
                                 district: restaurant.address?.district,
                                 city: restaurant.address?.city
