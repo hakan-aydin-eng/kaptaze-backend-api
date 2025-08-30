@@ -622,20 +622,25 @@ router.get('/packages', async (req, res, next) => {
 
                     allPackages.push({
                         // Package info
+                        id: pkg.id,
                         packageId: pkg.id,
-                        name: pkg.name,
+                        packageName: pkg.name,
                         description: pkg.description,
                         price: pkg.price,
-                        originalPrice: pkg.originalPrice,
-                        discountedPrice: pkg.discountedPrice,
+                        originalPrice: pkg.originalPrice || pkg.price,
+                        discountPrice: pkg.discountedPrice || pkg.price,
+                        discount: pkg.originalPrice ? Math.round(((pkg.originalPrice - (pkg.discountedPrice || pkg.price)) / pkg.originalPrice) * 100) : 0,
                         quantity: pkg.quantity,
                         category: pkg.category,
                         tags: pkg.tags,
-                        status: pkg.status,
+                        status: pkg.status || 'active',
                         availableUntil: pkg.availableUntil,
                         createdAt: pkg.createdAt,
+                        expiryTime: pkg.availableUntil ? new Date(pkg.availableUntil).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : '23:59',
                         
                         // Restaurant info
+                        restaurantId: restaurant._id,
+                        restaurantName: restaurant.name,
                         restaurant: {
                             id: restaurant._id,
                             name: restaurant.name,
@@ -1417,6 +1422,97 @@ router.post('/send-email', async (req, res, next) => {
             error: 'Email sending failed',
             details: error.message
         });
+    }
+});
+
+// @route   PATCH /admin/packages/:packageId/status
+// @desc    Update package status (suspend/activate)
+// @access  Private (Admin)
+router.patch('/packages/:packageId/status', async (req, res, next) => {
+    try {
+        const { packageId } = req.params;
+        const { status } = req.body;
+
+        if (!['active', 'suspended', 'inactive'].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid status value'
+            });
+        }
+
+        // Find restaurant with this package
+        const restaurant = await Restaurant.findOne({ 'packages.id': packageId });
+        
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Package not found'
+            });
+        }
+
+        // Update package status
+        const package = restaurant.packages.find(pkg => pkg.id === packageId);
+        if (package) {
+            package.status = status;
+            package.updatedAt = new Date();
+            await restaurant.save();
+
+            res.json({
+                success: true,
+                message: `Package status updated to ${status}`,
+                data: package
+            });
+        } else {
+            return res.status(404).json({
+                success: false,
+                error: 'Package not found in restaurant'
+            });
+        }
+
+    } catch (error) {
+        next(error);
+    }
+});
+
+// @route   DELETE /admin/packages/:packageId
+// @desc    Delete a package permanently
+// @access  Private (Admin)
+router.delete('/packages/:packageId', async (req, res, next) => {
+    try {
+        const { packageId } = req.params;
+
+        // Find restaurant with this package
+        const restaurant = await Restaurant.findOne({ 'packages.id': packageId });
+        
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Package not found'
+            });
+        }
+
+        // Remove package from array
+        const packageIndex = restaurant.packages.findIndex(pkg => pkg.id === packageId);
+        
+        if (packageIndex !== -1) {
+            const deletedPackage = restaurant.packages[packageIndex];
+            restaurant.packages.splice(packageIndex, 1);
+            await restaurant.save();
+
+            res.json({
+                success: true,
+                message: 'Package deleted successfully',
+                data: deletedPackage
+            });
+        } else {
+            return res.status(404).json({
+                success: false,
+                error: 'Package not found in restaurant'
+            });
+        }
+
+    } catch (error) {
+        next(error);
     }
 });
 

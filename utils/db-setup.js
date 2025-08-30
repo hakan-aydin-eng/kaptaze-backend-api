@@ -31,6 +31,11 @@ const connectDB = async () => {
             maxPoolSize: 10,
             serverSelectionTimeoutMS: 5000,
             socketTimeoutMS: 45000,
+            // UTF-8 encoding support for Turkish characters
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            bufferCommands: false,
+            bufferMaxEntries: 0
         });
         
         console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
@@ -47,7 +52,12 @@ const connectDB = async () => {
                 const mongoUri = mongoServer.getUri();
                 console.log('🧪 In-memory MongoDB server started as fallback');
                 
-                const conn = await mongoose.connect(mongoUri);
+                const conn = await mongoose.connect(mongoUri, {
+                    useNewUrlParser: true,
+                    useUnifiedTopology: true,
+                    bufferCommands: false,
+                    bufferMaxEntries: 0
+                });
                 console.log(`✅ Connected to in-memory MongoDB: ${conn.connection.host}`);
                 return conn;
             } catch (fallbackError) {
