@@ -78,6 +78,12 @@ const limiter = rateLimit({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// UTF-8 Encoding for Turkish Characters
+app.use((req, res, next) => {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    next();
+});
+
 // Serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));
 
