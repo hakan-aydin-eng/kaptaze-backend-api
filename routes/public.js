@@ -211,8 +211,8 @@ router.get('/restaurants', async (req, res, next) => {
         const skip = (parseInt(page) - 1) * parseInt(limit);
         query = query.skip(skip).limit(parseInt(limit));
 
-        // Sort by rating and order count
-        query = query.sort({ 'rating.average': -1, 'stats.totalOrders': -1 });
+        // Sort by rating, order count, then by newest first for new restaurants
+        query = query.sort({ 'rating.average': -1, 'stats.totalOrders': -1, 'createdAt': -1 });
 
         // Select public fields only
         query = query.select('name description category address location rating stats serviceOptions deliveryInfo images imageUrl profileImage');
