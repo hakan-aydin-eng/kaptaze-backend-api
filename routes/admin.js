@@ -463,7 +463,7 @@ router.get('/restaurants', async (req, res, next) => {
 });
 
 // @route   PATCH /admin/restaurants/:restaurantId/status
-// @desc    Suspend or resume restaurant
+// @desc    Suspend or resume restaurant  
 // @access  Private (Admin)
 router.patch('/restaurants/:restaurantId/status', async (req, res, next) => {
     try {
