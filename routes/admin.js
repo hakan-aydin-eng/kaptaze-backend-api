@@ -462,6 +462,67 @@ router.get('/restaurants', async (req, res, next) => {
     }
 });
 
+// @route   PATCH /admin/restaurants/:restaurantId/status
+// @desc    Suspend or resume restaurant
+// @access  Private (Admin)
+router.patch('/restaurants/:restaurantId/status', async (req, res, next) => {
+    try {
+        const { restaurantId } = req.params;
+        const { action, reason } = req.body; // action: 'suspend' or 'resume'
+
+        const restaurant = await Restaurant.findById(restaurantId);
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Restaurant not found'
+            });
+        }
+
+        // Update restaurant status based on action
+        if (action === 'suspend') {
+            restaurant.status = 'suspended';
+            restaurant.suspendedAt = new Date();
+            restaurant.suspensionReason = reason || 'Admin tarafından askıya alındı';
+            
+            // Also suspend the user account
+            const user = await User.findById(restaurant.ownerId);
+            if (user) {
+                user.isActive = false;
+                await user.save();
+            }
+            
+        } else if (action === 'resume') {
+            restaurant.status = 'active';
+            restaurant.suspendedAt = null;
+            restaurant.suspensionReason = null;
+            
+            // Also reactivate the user account
+            const user = await User.findById(restaurant.ownerId);
+            if (user) {
+                user.isActive = true;
+                await user.save();
+            }
+        } else {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid action. Use "suspend" or "resume"'
+            });
+        }
+
+        restaurant.lastActivity = new Date();
+        await restaurant.save();
+
+        res.json({
+            success: true,
+            message: `Restaurant ${action === 'suspend' ? 'suspended' : 'resumed'} successfully`,
+            data: restaurant
+        });
+
+    } catch (error) {
+        next(error);
+    }
+});
+
 // @route   PATCH /admin/restaurants/:restaurantId
 // @desc    Update restaurant status
 // @access  Private (Admin)
