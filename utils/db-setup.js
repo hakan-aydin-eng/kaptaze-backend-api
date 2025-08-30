@@ -34,8 +34,7 @@ const connectDB = async () => {
             // UTF-8 encoding support for Turkish characters
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            bufferCommands: false,
-            bufferMaxEntries: 0
+            bufferCommands: false
         });
         
         console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
@@ -55,8 +54,7 @@ const connectDB = async () => {
                 const conn = await mongoose.connect(mongoUri, {
                     useNewUrlParser: true,
                     useUnifiedTopology: true,
-                    bufferCommands: false,
-                    bufferMaxEntries: 0
+                    bufferCommands: false
                 });
                 console.log(`✅ Connected to in-memory MongoDB: ${conn.connection.host}`);
                 return conn;
