@@ -5,6 +5,14 @@ const Order = require('../models/Order');
 const Restaurant = require('../models/Restaurant');
 const { sendOrderNotification } = require('../services/emailService');
 
+// Test endpoint
+router.get('/test', (req, res) => {
+    res.json({ 
+        message: 'Orders API is working!', 
+        timestamp: new Date().toISOString() 
+    });
+});
+
 // Create new order from mobile app
 router.post('/create', async (req, res) => {
     try {
