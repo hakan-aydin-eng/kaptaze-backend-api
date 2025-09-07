@@ -16,6 +16,8 @@ router.get('/test', (req, res) => {
 // Create new order from mobile app
 router.post('/create', async (req, res) => {
     try {
+        console.log('Received order request:', req.body);
+        
         const { 
             customer, 
             restaurantId, 
@@ -25,9 +27,14 @@ router.post('/create', async (req, res) => {
             notes 
         } = req.body;
 
+        console.log('Looking for restaurant with ID:', restaurantId);
+
         // Get restaurant details
         const restaurant = await Restaurant.findById(restaurantId);
+        console.log('Found restaurant:', restaurant ? restaurant.name : 'null');
+        
         if (!restaurant) {
+            console.log('Restaurant not found with ID:', restaurantId);
             return res.status(404).json({ error: 'Restaurant not found' });
         }
 
