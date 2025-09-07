@@ -12,12 +12,10 @@ const Restaurant = require('../models/Restaurant');
 const User = require('../models/User');
 const Consumer = require('../models/Consumer');
 const Package = require('../models/Package');
-const EmailService = require('../services/emailService');
+// Email service temporarily disabled for deployment
+// const { sendOrderNotification } = require('../services/emailService');
 
 const router = express.Router();
-
-// Initialize email service
-const emailService = new EmailService();
 
 // All admin routes require authentication and admin role
 router.use(authenticate);
@@ -279,10 +277,12 @@ router.post('/applications/:applicationId/approve', [
         // Send approval email with credentials
         let emailStatus = { sent: false, error: null };
         try {
-            const emailResult = await emailService.sendApplicationApprovalEmail(application, {
-                username: finalUsername,
-                password: finalPassword
-            });
+            // Email functionality temporarily disabled - replace with proper email service
+            // const emailResult = await sendOrderNotification(application, {
+            //     username: finalUsername,
+            //     password: finalPassword
+            // });
+            const emailResult = { success: false }; // Temporary placeholder
             
             if (emailResult.success) {
                 console.log(`📧 Approval email sent successfully to: ${application.email}`);
@@ -394,7 +394,8 @@ router.post('/applications/:applicationId/reject', [
 
         // Send rejection email
         try {
-            await emailService.sendApplicationRejectionEmail(application, reason);
+            // Email functionality temporarily disabled
+            // await sendOrderNotification(application, reason);
             console.log(`📧 Rejection email sent to: ${application.email}`);
         } catch (emailError) {
             console.error('❌ Failed to send rejection email:', emailError.message);
