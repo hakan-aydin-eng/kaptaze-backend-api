@@ -61,10 +61,15 @@ router.post('/create', async (req, res) => {
             timestamp: new Date()
         });
 
-        // Send email notification if email exists (temporarily disabled for debugging)
-        // if (restaurant.email) {
-        //     await sendOrderNotification(order, restaurant.email);
-        // }
+        // Send email notification if email exists
+        if (restaurant.email) {
+            try {
+                await sendOrderNotification(order, restaurant.email);
+                console.log('✅ Email sent to:', restaurant.email);
+            } catch (emailError) {
+                console.error('❌ Email failed:', emailError.message);
+            }
+        }
 
         res.json({
             success: true,
