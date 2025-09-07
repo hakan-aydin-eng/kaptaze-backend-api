@@ -1,65 +1,126 @@
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 
-// Dinamik email konfigürasyonu - Gmail'den kurumsal mail'e kolay geçiş
-const createTransporter = () => {
-  // Kurumsal mail için SMTP ayarları
-  if (process.env.SMTP_HOST) {
-    return nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT || 587,
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
-    });
-  }
-  
-  // Gmail fallback (başlangıç için)
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER || 'kaptazebilgi@gmail.com',
-      pass: process.env.EMAIL_PASS || 'your-app-password'
-    }
-  });
-};
+// SendGrid API key configuration
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
-const transporter = createTransporter();
+console.log('📧 SendGrid initialized:', process.env.SENDGRID_API_KEY ? 'API Key Set' : 'API Key Missing');
 
 const sendOrderNotification = async (order, restaurantEmail) => {
-  console.log('📧 Starting email notification...');
-  console.log('📧 EMAIL_USER:', process.env.EMAIL_USER ? 'Set' : 'Not set');
-  console.log('📧 EMAIL_PASS:', process.env.EMAIL_PASS ? 'Set' : 'Not set');
+  console.log('📧 Starting SendGrid email notification...');
+  console.log('📧 SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY ? 'Set' : 'Not set');
   console.log('📧 To:', restaurantEmail);
 
-  // From adresi kurumsal veya Gmail
-  const fromAddress = process.env.SMTP_HOST 
-    ? 'KapTaze Sipariş <siparis@kaptaze.com>'
-    : process.env.EMAIL_USER || 'KapTaze <kaptazebilgi@gmail.com>';
-    
+  // From adresi - SendGrid verified sender
+  const fromAddress = process.env.SENDGRID_FROM_EMAIL || 'siparis@kaptaze.com';
+  
   console.log('📧 From:', fromAddress);
-    
-  const mailOptions = {
-    from: fromAddress,
+
+  const msg = {
     to: restaurantEmail,
+    from: {
+      email: fromAddress,
+      name: 'KapTaze Sipariş Sistemi'
+    },
     subject: `🔔 Yeni Sipariş - ${order.customer.name}`,
-    replyTo: 'destek@kaptaze.com', // Müşteri desteği için
+    replyTo: 'destek@kaptaze.com',
     html: `
       <!DOCTYPE html>
       <html>
       <head>
         <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 20px; border: 1px solid #ddd; }
-          .order-info { background: white; padding: 15px; margin: 15px 0; border-radius: 5px; }
-          .items { background: white; padding: 15px; margin: 15px 0; border-radius: 5px; }
-          .item { padding: 10px 0; border-bottom: 1px solid #eee; }
-          .item:last-child { border-bottom: none; }
-          .total { font-size: 18px; font-weight: bold; color: #4CAF50; margin-top: 15px; }
-          .button { display: inline-block; padding: 12px 30px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px; }
+          body { 
+            font-family: Arial, sans-serif; 
+            line-height: 1.6; 
+            color: #333; 
+            margin: 0; 
+            padding: 0; 
+            background: #f4f4f4;
+          }
+          .container { 
+            max-width: 600px; 
+            margin: 20px auto; 
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+          }
+          .header { 
+            background: linear-gradient(135deg, #4CAF50, #45a049); 
+            color: white; 
+            padding: 30px 20px; 
+            text-align: center; 
+          }
+          .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 300;
+          }
+          .content { 
+            padding: 30px 20px; 
+          }
+          .order-info { 
+            background: #f8f9fa; 
+            padding: 20px; 
+            margin: 20px 0; 
+            border-radius: 8px;
+            border-left: 4px solid #4CAF50;
+          }
+          .items { 
+            background: white; 
+            padding: 20px; 
+            margin: 20px 0; 
+            border-radius: 8px; 
+            border: 1px solid #e9ecef;
+          }
+          .item { 
+            padding: 12px 0; 
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+          }
+          .item:last-child { 
+            border-bottom: none; 
+          }
+          .total { 
+            font-size: 20px; 
+            font-weight: bold; 
+            color: #4CAF50; 
+            margin-top: 20px; 
+            padding-top: 15px;
+            border-top: 2px solid #4CAF50;
+            text-align: right;
+          }
+          .button { 
+            display: inline-block; 
+            padding: 15px 40px; 
+            background: linear-gradient(135deg, #4CAF50, #45a049); 
+            color: white; 
+            text-decoration: none; 
+            border-radius: 25px; 
+            margin: 25px 0;
+            text-align: center;
+            font-weight: 500;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+          }
+          .footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+          }
+          h2 {
+            color: #4CAF50;
+            margin-bottom: 15px;
+          }
+          .info-row {
+            margin: 10px 0;
+            font-size: 16px;
+          }
+          .info-label {
+            font-weight: 600;
+            color: #555;
+          }
         </style>
       </head>
       <body>
@@ -67,21 +128,28 @@ const sendOrderNotification = async (order, restaurantEmail) => {
           <div class="header">
             <h1>🍽️ Yeni Sipariş Geldi!</h1>
           </div>
+          
           <div class="content">
             <div class="order-info">
               <h2>Müşteri Bilgileri</h2>
-              <p><strong>Ad Soyad:</strong> ${order.customer.name}</p>
-              <p><strong>Telefon:</strong> ${order.customer.phone}</p>
-              <p><strong>Adres:</strong> ${order.customer.address}</p>
-              ${order.notes ? `<p><strong>Not:</strong> ${order.notes}</p>` : ''}
+              <div class="info-row">
+                <span class="info-label">Ad Soyad:</span> ${order.customer.name}
+              </div>
+              <div class="info-row">
+                <span class="info-label">Telefon:</span> ${order.customer.phone}
+              </div>
+              <div class="info-row">
+                <span class="info-label">Adres:</span> ${order.customer.address}
+              </div>
+              ${order.notes ? `<div class="info-row"><span class="info-label">Not:</span> ${order.notes}</div>` : ''}
             </div>
             
             <div class="items">
               <h2>Sipariş Detayları</h2>
               ${order.items.map(item => `
                 <div class="item">
-                  <strong>${item.quantity}x ${item.name}</strong>
-                  <span style="float: right;">₺${item.total.toFixed(2)}</span>
+                  <span><strong>${item.quantity}x ${item.name}</strong></span>
+                  <span>₺${item.total.toFixed(2)}</span>
                 </div>
               `).join('')}
               <div class="total">
@@ -89,16 +157,23 @@ const sendOrderNotification = async (order, restaurantEmail) => {
               </div>
             </div>
             
-            <p><strong>Ödeme Yöntemi:</strong> ${
-              order.paymentMethod === 'cash' ? 'Nakit' :
-              order.paymentMethod === 'card' ? 'Kredi Kartı' : 'Online'
-            }</p>
+            <div class="info-row" style="font-size: 16px; margin: 20px 0;">
+              <span class="info-label">Ödeme Yöntemi:</span> ${
+                order.paymentMethod === 'cash' ? 'Nakit' :
+                order.paymentMethod === 'card' ? 'Kredi Kartı' : 'Online'
+              }
+            </div>
             
             <center>
-              <a href="${process.env.FRONTEND_URL}/restaurant-panel.html" class="button">
-                Panele Git
+              <a href="${process.env.FRONTEND_URL || 'https://kaptaze.com'}/restaurant-panel" class="button">
+                🍽️ Panele Git ve Siparişi Yönet
               </a>
             </center>
+          </div>
+          
+          <div class="footer">
+            <p>KapTaze Sipariş Sistemi | Restoranınız için daha iyi bir deneyim</p>
+            <p>Destek: destek@kaptaze.com | Web: kaptaze.com</p>
           </div>
         </div>
       </body>
@@ -107,10 +182,16 @@ const sendOrderNotification = async (order, restaurantEmail) => {
   };
 
   try {
-    await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully');
+    console.log('📧 Sending email via SendGrid...');
+    await sgMail.send(msg);
+    console.log('✅ Email sent successfully via SendGrid');
+    return { success: true, message: 'Email sent successfully' };
   } catch (error) {
-    console.error('Email sending failed:', error);
+    console.error('❌ SendGrid email failed:', error);
+    if (error.response) {
+      console.error('SendGrid response body:', error.response.body);
+    }
+    return { success: false, error: error.message };
   }
 };
 

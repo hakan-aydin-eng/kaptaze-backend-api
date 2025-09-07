@@ -12,8 +12,8 @@ const Restaurant = require('../models/Restaurant');
 const User = require('../models/User');
 const Consumer = require('../models/Consumer');
 const Package = require('../models/Package');
-// Email service temporarily disabled for deployment
-// const { sendOrderNotification } = require('../services/emailService');
+// SendGrid email service - now active with proper configuration
+const { sendOrderNotification } = require('../services/emailService');
 
 const router = express.Router();
 
