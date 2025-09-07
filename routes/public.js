@@ -215,7 +215,7 @@ router.get('/restaurants', async (req, res, next) => {
         query = query.sort({ 'rating.average': -1, 'stats.totalOrders': -1, 'createdAt': -1 });
 
         // Select public fields including packages for mobile app
-        query = query.select('name description category address location rating stats serviceOptions deliveryInfo images imageUrl profileImage packages');
+        query = query.select('name description category address location rating stats serviceOptions deliveryInfo images imageUrl profileImage packages socialMedia website phone email');
 
         const restaurants = await query.exec();
         const total = await Restaurant.countDocuments(query.getFilter());
@@ -247,7 +247,7 @@ router.get('/restaurants/:restaurantId', async (req, res, next) => {
         const restaurant = await Restaurant.findOne({ 
             _id: restaurantId, 
             status: 'active' 
-        }).select('name description category address location rating stats serviceOptions deliveryInfo images imageUrl profileImage openingHours packages');
+        }).select('name description category address location rating stats serviceOptions deliveryInfo images imageUrl profileImage openingHours packages socialMedia website phone email');
 
         if (!restaurant) {
             return res.status(404).json({

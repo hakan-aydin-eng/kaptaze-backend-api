@@ -9,6 +9,7 @@ const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const Consumer = require('../models/Consumer');
 const { authenticate } = require('../middleware/auth');
+const { sendWelcomeEmail } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -340,6 +341,19 @@ router.post('/register', [
 
         // Generate token
         const token = generateToken(consumer, 'consumer');
+
+        // Send welcome email (non-blocking)
+        sendWelcomeEmail(consumer.email, consumer.name)
+            .then(result => {
+                if (result.success) {
+                    console.log(`📧 Welcome email sent to: ${consumer.email}`);
+                } else {
+                    console.log(`⚠️ Welcome email failed for: ${consumer.email} - ${result.error}`);
+                }
+            })
+            .catch(error => {
+                console.log(`❌ Welcome email error for: ${consumer.email} - ${error.message}`);
+            });
 
         // Log successful registration
         console.log(`🎉 New consumer registered: ${consumer.name} ${consumer.surname} (${consumer.email})`);
