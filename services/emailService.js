@@ -28,10 +28,17 @@ const createTransporter = () => {
 const transporter = createTransporter();
 
 const sendOrderNotification = async (order, restaurantEmail) => {
+  console.log('📧 Starting email notification...');
+  console.log('📧 EMAIL_USER:', process.env.EMAIL_USER ? 'Set' : 'Not set');
+  console.log('📧 EMAIL_PASS:', process.env.EMAIL_PASS ? 'Set' : 'Not set');
+  console.log('📧 To:', restaurantEmail);
+
   // From adresi kurumsal veya Gmail
   const fromAddress = process.env.SMTP_HOST 
     ? 'KapTaze Sipariş <siparis@kaptaze.com>'
-    : process.env.EMAIL_USER || 'KapTaze <kaptaze.notifications@gmail.com>';
+    : process.env.EMAIL_USER || 'KapTaze <kaptazebilgi@gmail.com>';
+    
+  console.log('📧 From:', fromAddress);
     
   const mailOptions = {
     from: fromAddress,
