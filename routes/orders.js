@@ -61,10 +61,10 @@ router.post('/create', async (req, res) => {
             timestamp: new Date()
         });
 
-        // Send email notification if email exists
-        if (restaurant.email) {
-            await sendOrderNotification(order, restaurant.email);
-        }
+        // Send email notification if email exists (temporarily disabled for debugging)
+        // if (restaurant.email) {
+        //     await sendOrderNotification(order, restaurant.email);
+        // }
 
         res.json({
             success: true,
@@ -73,8 +73,12 @@ router.post('/create', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Order creation error:', error);
-        res.status(500).json({ error: 'Failed to create order' });
+        console.error('Order creation error:', error.message);
+        console.error('Full error:', error);
+        res.status(500).json({ 
+            error: 'Failed to create order',
+            message: error.message 
+        });
     }
 });
 
