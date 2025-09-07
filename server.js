@@ -9,6 +9,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const http = require('http');
+const socketIO = require('socket.io');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -22,6 +24,13 @@ const errorHandler = require('./middleware/errorHandler');
 const logger = require('./middleware/logger');
 
 const app = express();
+const server = http.createServer(app);
+const io = socketIO(server, {
+    cors: {
+        origin: '*',
+        methods: ['GET', 'POST']
+    }
+});
 
 // Security Middleware
 app.use(helmet({
@@ -101,6 +110,33 @@ app.use('/uploads', express.static('uploads'));
 // Logging Middleware
 app.use(logger);
 
+// Socket.IO Connection Management
+const restaurantSockets = new Map();
+
+io.on('connection', (socket) => {
+    console.log('New client connected:', socket.id);
+    
+    socket.on('restaurant-connect', (restaurantId) => {
+        restaurantSockets.set(restaurantId, socket.id);
+        socket.join(`restaurant-${restaurantId}`);
+        console.log(`Restaurant ${restaurantId} connected`);
+    });
+    
+    socket.on('disconnect', () => {
+        for (const [restaurantId, socketId] of restaurantSockets.entries()) {
+            if (socketId === socket.id) {
+                restaurantSockets.delete(restaurantId);
+                console.log(`Restaurant ${restaurantId} disconnected`);
+                break;
+            }
+        }
+    });
+});
+
+// Make io available to routes
+app.set('io', io);
+app.set('restaurantSockets', restaurantSockets);
+
 // API Routes
 app.use('/auth', authRoutes);
 app.use('/public', publicRoutes);
@@ -152,13 +188,14 @@ const startServer = async () => {
         const seedData = require('./utils/seedData');
         await seedData();
         
-        // Start the server
-        app.listen(PORT, () => {
+        // Start the server with Socket.IO
+        server.listen(PORT, () => {
             console.log('\n🚀 KapTaze API Server Started!');
             console.log(`📍 Server running on port ${PORT}`);
             console.log(`🌐 Environment: ${process.env.NODE_ENV}`);
             console.log(`🔗 Health check: http://localhost:${PORT}/health`);
             console.log(`📚 API docs: http://localhost:${PORT}/`);
+            console.log(`🔌 Socket.IO: Enabled`);
             console.log('════════════════════════════════════════\n');
         });
     } catch (error) {
