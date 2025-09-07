@@ -40,4 +40,16 @@ orderSchema.pre('save', function(next) {
   next();
 });
 
+// Clean up any problematic indexes on startup
+orderSchema.statics.cleanupIndexes = async function() {
+  try {
+    await this.collection.dropIndex('orderId_1');
+    console.log('Dropped problematic orderId_1 index');
+  } catch (error) {
+    if (error.code !== 27) { // Index not found error is OK
+      console.log('Index cleanup:', error.message);
+    }
+  }
+};
+
 module.exports = mongoose.model('Order', orderSchema);

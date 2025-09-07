@@ -188,6 +188,10 @@ const startServer = async () => {
         const seedData = require('./utils/seedData');
         await seedData();
         
+        // Clean up problematic indexes
+        const Order = require('./models/Order');
+        await Order.cleanupIndexes();
+        
         // Start the server with Socket.IO
         server.listen(PORT, () => {
             console.log('\n🚀 KapTaze API Server Started!');
