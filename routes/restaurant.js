@@ -52,6 +52,14 @@ router.get('/me', async (req, res, next) => {
             });
         }
 
+        // Debug logging
+        console.log('🔍 Restaurant /me endpoint - Website data:', {
+            restaurantId: restaurant._id,
+            restaurantName: restaurant.name,
+            socialMedia: restaurant.socialMedia,
+            website: restaurant.socialMedia?.website
+        });
+
         res.json({
             success: true,
             data: restaurant
