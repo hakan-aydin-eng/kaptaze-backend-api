@@ -67,6 +67,7 @@ router.get('/me', async (req, res, next) => {
 // @access  Private (Restaurant)
 router.put('/me', [
     body('description').optional().trim().isLength({ max: 500 }),
+    body('socialMedia.website').optional().trim().isURL().withMessage('Geçerli bir web sitesi URL\'si girin'),
     body('phone').optional().trim().matches(/^\+?[\d\s-()]+$/),
     body('openingHours').optional().isArray(),
     body('deliveryInfo.radius').optional().isFloat({ min: 0, max: 50 }),
