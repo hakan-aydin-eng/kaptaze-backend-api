@@ -125,17 +125,17 @@ router.use(authorize('restaurant'));
 // @access  Private (Restaurant)
 router.get('/me', async (req, res, next) => {
     try {
-        // Get restaurant by owner ID
-        const restaurant = await Restaurant.findOne({ ownerId: req.user._id })
-            .populate('applicationId', 'applicationId createdAt')
-            .populate('ownerId', 'username email lastLogin');
-
-        if (!restaurant) {
+        // Get user with restaurant data
+        const user = await User.findById(req.user._id).populate('restaurantId');
+        
+        if (!user || !user.restaurantId) {
             return res.status(404).json({
                 success: false,
                 error: 'Restaurant profile not found'
             });
         }
+        
+        const restaurant = user.restaurantId;
 
         // Debug logging
         console.log('🔍 Restaurant /me endpoint - Website data:', {
@@ -147,7 +147,37 @@ router.get('/me', async (req, res, next) => {
 
         res.json({
             success: true,
-            data: restaurant
+            data: {
+                user: {
+                    id: user._id,
+                    username: user.username,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    email: user.email,
+                    role: user.role,
+                    restaurantId: restaurant._id
+                },
+                restaurant: {
+                    id: restaurant._id,
+                    name: restaurant.name,
+                    category: restaurant.category,
+                    status: restaurant.status,
+                    description: restaurant.description,
+                    phone: restaurant.phone,
+                    address: restaurant.address,
+                    location: restaurant.location,
+                    imageUrl: restaurant.imageUrl,
+                    socialMedia: restaurant.socialMedia,
+                    openingHours: restaurant.openingHours,
+                    deliveryInfo: restaurant.deliveryInfo,
+                    serviceOptions: restaurant.serviceOptions,
+                    rating: restaurant.rating,
+                    stats: restaurant.stats,
+                    isVerified: restaurant.isVerified,
+                    createdAt: restaurant.createdAt,
+                    lastActivity: restaurant.lastActivity
+                }
+            }
         });
 
     } catch (error) {
