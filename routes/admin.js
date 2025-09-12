@@ -17,6 +17,163 @@ const { sendOrderNotification } = require('../services/emailService');
 
 const router = express.Router();
 
+// Email service functions
+async function sendApprovalEmail(application, credentials) {
+    const sgMail = require('@sendgrid/mail');
+    
+    if (!process.env.SENDGRID_API_KEY) {
+        throw new Error('SendGrid API key not configured');
+    }
+    
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    
+    const fromAddress = process.env.SENDGRID_FROM_EMAIL || 'admin@kaptaze.com';
+    
+    const msg = {
+        to: application.email,
+        from: {
+            email: fromAddress,
+            name: 'KapTaze Restaurant Platform'
+        },
+        subject: '🎉 KapTaze Başvurunuz Onaylandı - Giriş Bilgileriniz',
+        replyTo: 'destek@kaptaze.com',
+        html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body { 
+                        font-family: Arial, sans-serif; 
+                        line-height: 1.6; 
+                        color: #333; 
+                        margin: 0; 
+                        padding: 0; 
+                        background: #f4f4f4;
+                    }
+                    .container { 
+                        max-width: 600px; 
+                        margin: 20px auto; 
+                        background: white;
+                        border-radius: 10px;
+                        overflow: hidden;
+                        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                    }
+                    .header { 
+                        background: linear-gradient(135deg, #4CAF50, #45a049); 
+                        color: white; 
+                        padding: 30px 20px; 
+                        text-align: center; 
+                    }
+                    .header h1 {
+                        margin: 0;
+                        font-size: 24px;
+                        font-weight: 300;
+                    }
+                    .content { 
+                        padding: 30px 20px; 
+                    }
+                    .credentials { 
+                        background: #f8f9fa; 
+                        padding: 20px; 
+                        margin: 20px 0; 
+                        border-radius: 8px;
+                        border-left: 4px solid #4CAF50;
+                    }
+                    .button { 
+                        display: inline-block; 
+                        padding: 15px 40px; 
+                        background: linear-gradient(135deg, #4CAF50, #45a049); 
+                        color: white; 
+                        text-decoration: none; 
+                        border-radius: 25px; 
+                        margin: 25px 0;
+                        text-align: center;
+                        font-weight: 500;
+                        box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+                    }
+                    .footer {
+                        background: #f8f9fa;
+                        padding: 20px;
+                        text-align: center;
+                        color: #666;
+                        font-size: 14px;
+                    }
+                    h2 {
+                        color: #4CAF50;
+                        margin-bottom: 15px;
+                    }
+                    .info-row {
+                        margin: 10px 0;
+                        font-size: 16px;
+                    }
+                    .info-label {
+                        font-weight: 600;
+                        color: #555;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>🎉 Başvurunuz Onaylandı!</h1>
+                    </div>
+                    
+                    <div class="content">
+                        <p>Merhaba <strong>${application.firstName} ${application.lastName}</strong>,</p>
+                        
+                        <p>KapTaze restoranlar platformuna başvurunuz onaylanmıştır. Hoşgeldiniz!</p>
+                        
+                        <div class="credentials">
+                            <h2>🔑 Giriş Bilgileriniz</h2>
+                            <div class="info-row">
+                                <span class="info-label">Kullanıcı Adı:</span> <strong>${credentials.username}</strong>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Şifre:</span> <strong>${credentials.password}</strong>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Restoran Adı:</span> ${application.businessName}
+                            </div>
+                        </div>
+                        
+                        <center>
+                            <a href="https://kaptaze.com/restaurant-login.html" class="button">
+                                🏪 Restoran Panelime Giriş Yap
+                            </a>
+                        </center>
+                        
+                        <p><strong>Önemli Notlar:</strong></p>
+                        <ul>
+                            <li>Giriş bilgilerinizi güvenli bir yerde saklayın</li>
+                            <li>İlk girişinizde şifrenizi değiştirmenizi öneririz</li>
+                            <li>Herhangi bir sorun yaşarsanız destek@kaptaze.com adresinden bize ulaşabilirsiniz</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="footer">
+                        <p>KapTaze Restaurant Platform | Restoranınız için daha iyi bir deneyim</p>
+                        <p>Destek: destek@kaptaze.com | Web: kaptaze.com</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `
+    };
+
+    try {
+        console.log('📧 Sending approval email via SendGrid...');
+        await sgMail.send(msg);
+        console.log('✅ Approval email sent successfully via SendGrid');
+        return { success: true, messageId: Date.now().toString() };
+    } catch (error) {
+        console.error('❌ SendGrid approval email failed:', error);
+        if (error.response) {
+            console.error('SendGrid response body:', error.response.body);
+        }
+        return { success: false, error: error.message };
+    }
+}
+
 // All admin routes require authentication and admin role
 router.use(authenticate);
 router.use(authorize('admin'));
@@ -277,12 +434,10 @@ router.post('/applications/:applicationId/approve', [
         // Send approval email with credentials
         let emailStatus = { sent: false, error: null };
         try {
-            // Email functionality temporarily disabled - replace with proper email service
-            // const emailResult = await sendOrderNotification(application, {
-            //     username: finalUsername,
-            //     password: finalPassword
-            // });
-            const emailResult = { success: false }; // Temporary placeholder
+            const emailResult = await sendApprovalEmail(application, {
+                username: finalUsername,
+                password: finalPassword
+            });
             
             if (emailResult.success) {
                 console.log(`📧 Approval email sent successfully to: ${application.email}`);
