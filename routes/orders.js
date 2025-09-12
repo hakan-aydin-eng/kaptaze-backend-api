@@ -92,11 +92,20 @@ router.get('/restaurant/:restaurantId', async (req, res) => {
     try {
         const { restaurantId } = req.params;
         const { status, date } = req.query;
+        
+        console.log(`🔍 Getting orders for restaurant: ${restaurantId}`);
 
-        let query = { 'restaurant.id': restaurantId };
+        // Handle both string and ObjectId comparisons
+        let query = {
+            $or: [
+                { 'restaurant.id': restaurantId },
+                { 'restaurant.id': new mongoose.Types.ObjectId(restaurantId) }
+            ]
+        };
         
         if (status) {
             query.status = status;
+            console.log(`📋 Filtering by status: ${status}`);
         }
         
         if (date) {
@@ -105,11 +114,21 @@ router.get('/restaurant/:restaurantId', async (req, res) => {
             const endDate = new Date(date);
             endDate.setHours(23, 59, 59, 999);
             query.createdAt = { $gte: startDate, $lte: endDate };
+            console.log(`📅 Filtering by date: ${date}`);
         }
+
+        console.log('🔍 MongoDB query:', JSON.stringify(query, null, 2));
 
         const orders = await Order.find(query)
             .sort({ createdAt: -1 })
             .limit(100);
+
+        console.log(`📦 Found ${orders.length} orders for restaurant ${restaurantId}`);
+        
+        // Debug: Show which restaurant each order belongs to
+        orders.forEach((order, index) => {
+            console.log(`Order ${index + 1}: ${order._id} -> Restaurant: ${order.restaurant.id} (${order.restaurant.name})`);
+        });
 
         res.json(orders);
     } catch (error) {
