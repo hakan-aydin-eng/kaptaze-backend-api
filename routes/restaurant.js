@@ -39,6 +39,11 @@ router.post('/login', [
 
         const { username, password } = req.body;
 
+        console.log('🔐 Restaurant login attempt:', {
+            username,
+            passwordLength: password ? password.length : 0
+        });
+
         // Find restaurant user
         const user = await User.findOne({ 
             username, 
@@ -46,7 +51,35 @@ router.post('/login', [
             status: 'active'
         }).populate('restaurantId');
 
-        if (!user || !await bcrypt.compare(password, user.password)) {
+        // If not found, try to find similar usernames for debugging
+        if (!user) {
+            const similarUsers = await User.find({
+                username: { $regex: username.substring(0, 4), $options: 'i' }
+            }).select('username role status').limit(5);
+            console.log('🔍 Similar usernames found:', similarUsers.map(u => ({ username: u.username, role: u.role, status: u.status })));
+        }
+
+        console.log('🔍 User lookup result:', {
+            userFound: !!user,
+            username: user?.username,
+            role: user?.role,
+            status: user?.status,
+            hasRestaurantId: !!user?.restaurantId
+        });
+
+        if (!user) {
+            console.log('❌ User not found with username:', username);
+            return res.status(401).json({
+                success: false,
+                error: 'Invalid username or password'
+            });
+        }
+
+        const passwordMatch = await bcrypt.compare(password, user.password);
+        console.log('🔑 Password check result:', passwordMatch);
+
+        if (!passwordMatch) {
+            console.log('❌ Password mismatch for user:', username);
             return res.status(401).json({
                 success: false,
                 error: 'Invalid username or password'
