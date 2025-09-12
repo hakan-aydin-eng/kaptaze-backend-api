@@ -57,6 +57,10 @@ router.post('/login', [
                 username: { $regex: username.substring(0, 4), $options: 'i' }
             }).select('username role status').limit(5);
             console.log('🔍 Similar usernames found:', similarUsers.map(u => ({ username: u.username, role: u.role, status: u.status })));
+            
+            // Also search for exact username match with any role/status
+            const exactMatch = await User.findOne({ username }).select('username role status');
+            console.log('🔍 Exact username match (any role/status):', exactMatch ? { username: exactMatch.username, role: exactMatch.role, status: exactMatch.status } : 'NOT FOUND');
         }
 
         console.log('🔍 User lookup result:', {
