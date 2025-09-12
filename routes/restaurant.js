@@ -14,6 +14,91 @@ const fs = require('fs');
 const cloudinary = require('../config/cloudinary');
 
 const router = express.Router();
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+
+// @route   POST /restaurant/login
+// @desc    Restaurant login (alias for /auth/restaurant/login)
+// @access  Public
+router.post('/login', [
+    body('username')
+        .notEmpty()
+        .withMessage('Username is required'),
+    body('password')
+        .notEmpty()
+        .withMessage('Password is required')
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                errors: errors.array()
+            });
+        }
+
+        const { username, password } = req.body;
+
+        // Find restaurant user
+        const user = await User.findOne({ 
+            username, 
+            role: 'restaurant',
+            status: 'active'
+        }).populate('restaurantId');
+
+        if (!user || !await bcrypt.compare(password, user.password)) {
+            return res.status(401).json({
+                success: false,
+                error: 'Invalid username or password'
+            });
+        }
+
+        // Update last login
+        user.lastLogin = new Date();
+        await user.save();
+
+        // Generate JWT token
+        const token = jwt.sign(
+            { 
+                id: user._id,
+                restaurantId: user.restaurantId?._id,
+                username: user.username,
+                email: user.email,
+                role: user.role
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+        );
+
+        res.json({
+            success: true,
+            message: 'Login successful',
+            data: {
+                token,
+                user: {
+                    id: user._id,
+                    username: user.username,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    email: user.email,
+                    role: user.role,
+                    lastLogin: user.lastLogin,
+                    restaurantId: user.restaurantId?._id
+                },
+                restaurant: user.restaurantId ? {
+                    id: user.restaurantId._id,
+                    name: user.restaurantId.name,
+                    status: user.restaurantId.status,
+                    category: user.restaurantId.category
+                } : null
+            }
+        });
+
+    } catch (error) {
+        console.error('Restaurant login error:', error);
+        next(error);
+    }
+});
 
 // Configure multer for memory storage (for Cloudinary)
 const upload = multer({
