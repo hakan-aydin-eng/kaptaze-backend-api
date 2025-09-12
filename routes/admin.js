@@ -769,15 +769,16 @@ router.get('/users', async (req, res, next) => {
 });
 
 // @route   PATCH /admin/users/:userId
-// @desc    Update user status
+// @desc    Update user status and restaurantId
 // @access  Private (Admin)
 router.patch('/users/:userId', [
     body('status').optional().isIn(['active', 'inactive', 'suspended']),
-    body('notes').optional().trim().isLength({ max: 500 })
+    body('notes').optional().trim().isLength({ max: 500 }),
+    body('restaurantId').optional().isMongoId()
 ], async (req, res, next) => {
     try {
         const { userId } = req.params;
-        const { status, notes } = req.body;
+        const { status, notes, restaurantId } = req.body;
 
         const user = await User.findById(userId);
         if (!user) {
@@ -789,6 +790,18 @@ router.patch('/users/:userId', [
 
         if (status) user.status = status;
         if (notes) user.adminNotes = notes;
+        if (restaurantId) {
+            // Verify restaurant exists
+            const restaurant = await Restaurant.findById(restaurantId);
+            if (!restaurant) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Restaurant not found'
+                });
+            }
+            user.restaurantId = restaurantId;
+            console.log(`Updated user ${userId} restaurantId to ${restaurantId}`);
+        }
 
         await user.save();
 
