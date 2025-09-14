@@ -85,7 +85,14 @@ router.post('/create', async (req, res) => {
         // Update stock levels
         for (const update of packageUpdates) {
             restaurant.packages[update.packageIndex].quantity = update.newQuantity;
-            console.log(`✅ Updated ${update.packageName} stock: ${update.newQuantity} (${update.orderedQuantity} adet düşüldü)`);
+            
+            // If stock reaches 0, make package inactive
+            if (update.newQuantity === 0) {
+                restaurant.packages[update.packageIndex].status = 'inactive';
+                console.log(`🔴 ${update.packageName} stok tükendi - paket inactive yapıldı`);
+            } else {
+                console.log(`✅ Updated ${update.packageName} stock: ${update.newQuantity} (${update.orderedQuantity} adet düşüldü)`);
+            }
         }
 
         // Save restaurant with updated stock
