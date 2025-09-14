@@ -5,6 +5,38 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 console.log('📧 SendGrid initialized:', process.env.SENDGRID_API_KEY ? 'API Key Set' : 'API Key Missing');
 
+const sendWelcomeEmail = async (userEmail, userName) => {
+  console.log('📧 Sending welcome email to:', userEmail);
+  
+  const fromAddress = process.env.SENDGRID_FROM_EMAIL || 'welcome@kaptaze.com';
+  
+  const msg = {
+    to: userEmail,
+    from: {
+      email: fromAddress,
+      name: 'KapTaze Hoşgeldin'
+    },
+    subject: '🎉 KapTaze\'ye Hoş Geldiniz!',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #16a34a;">🎉 Hoş Geldiniz ${userName}!</h2>
+        <p>KapTaze ailesine katıldığınız için teşekkür ederiz!</p>
+        <p>Artık yakınınızdaki restoranlardan %50'ye varan indirimlerle lezzetli yemeklere ulaşabilirsiniz.</p>
+        <p style="color: #16a34a; font-weight: bold;">İyi alışverişler dileriz! 🌱</p>
+      </div>
+    `
+  };
+
+  try {
+    await sgMail.send(msg);
+    console.log('✅ Welcome email sent successfully to:', userEmail);
+    return { success: true };
+  } catch (error) {
+    console.error('❌ SendGrid welcome email error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 const sendOrderNotification = async (order, restaurantEmail) => {
   console.log('📧 Starting SendGrid email notification...');
   console.log('📧 SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY ? 'Set' : 'Not set');
@@ -195,4 +227,4 @@ const sendOrderNotification = async (order, restaurantEmail) => {
   }
 };
 
-module.exports = { sendOrderNotification };
+module.exports = { sendOrderNotification, sendWelcomeEmail };
