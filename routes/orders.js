@@ -38,6 +38,60 @@ router.post('/create', async (req, res) => {
             return res.status(404).json({ error: 'Restaurant not found' });
         }
 
+        // Check stock availability for each item
+        const stockErrors = [];
+        const packageUpdates = [];
+
+        for (const orderItem of items) {
+            const packageId = orderItem.id || orderItem.productId;
+            console.log(`🔍 Checking stock for package ID: ${packageId}, quantity needed: ${orderItem.quantity}`);
+            
+            // Find the package in restaurant's packages array
+            const packageIndex = restaurant.packages.findIndex(pkg => pkg.id === packageId && pkg.status === 'active');
+            
+            if (packageIndex === -1) {
+                stockErrors.push(`Package ${orderItem.name} not found or inactive`);
+                continue;
+            }
+
+            const package = restaurant.packages[packageIndex];
+            console.log(`📦 Package ${package.name} - Current stock: ${package.quantity}, Requested: ${orderItem.quantity}`);
+
+            // Check if enough stock available
+            if (package.quantity < orderItem.quantity) {
+                stockErrors.push(`${package.name} - Sadece ${package.quantity} adet kaldı (${orderItem.quantity} adet istendi)`);
+                continue;
+            }
+
+            // Prepare stock update
+            packageUpdates.push({
+                packageIndex,
+                newQuantity: package.quantity - orderItem.quantity,
+                packageName: package.name,
+                orderedQuantity: orderItem.quantity
+            });
+        }
+
+        // Return error if any stock issues
+        if (stockErrors.length > 0) {
+            console.log('❌ Stock errors:', stockErrors);
+            return res.status(400).json({ 
+                error: 'Stok yetersiz',
+                details: stockErrors,
+                stockError: true
+            });
+        }
+
+        // Update stock levels
+        for (const update of packageUpdates) {
+            restaurant.packages[update.packageIndex].quantity = update.newQuantity;
+            console.log(`✅ Updated ${update.packageName} stock: ${update.newQuantity} (${update.orderedQuantity} adet düşüldü)`);
+        }
+
+        // Save restaurant with updated stock
+        await restaurant.save();
+        console.log('💾 Restaurant stock levels saved');
+
         // Create order
         const order = new Order({
             customer,
