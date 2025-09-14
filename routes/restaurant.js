@@ -434,13 +434,16 @@ router.patch('/packages/:packageId', async (req, res, next) => {
             });
         }
 
-        // Find package in Package collection
-        const packageDoc = await Package.findOne({ 
-            _id: packageId, 
-            restaurant: restaurant._id 
-        });
-        
-        if (!packageDoc) {
+        // Find package in restaurant.packages array (legacy system)
+        if (!restaurant.packages) {
+            return res.status(404).json({
+                success: false,
+                error: 'Package not found'
+            });
+        }
+
+        const packageIndex = restaurant.packages.findIndex(pkg => pkg.id === packageId);
+        if (packageIndex === -1) {
             return res.status(404).json({
                 success: false,
                 error: 'Package not found'
@@ -448,19 +451,20 @@ router.patch('/packages/:packageId', async (req, res, next) => {
         }
 
         // Update package fields
-        const allowedUpdates = ['name', 'description', 'originalPrice', 'discountedPrice', 'category', 'status', 'quantity'];
+        const allowedUpdates = ['name', 'description', 'price', 'category', 'status'];
         allowedUpdates.forEach(field => {
             if (req.body[field] !== undefined) {
-                packageDoc[field] = req.body[field];
+                restaurant.packages[packageIndex][field] = req.body[field];
             }
         });
 
-        await packageDoc.save();
+        restaurant.packages[packageIndex].updatedAt = new Date();
+        await restaurant.save();
 
         res.json({
             success: true,
             message: 'Package updated successfully',
-            data: packageDoc
+            data: restaurant.packages[packageIndex]
         });
 
     } catch (error) {
