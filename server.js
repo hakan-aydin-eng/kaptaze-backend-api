@@ -43,18 +43,17 @@ const corsOptions = {
     origin: process.env.FRONTEND_URLS?.split(',') || [
         'http://localhost:3000',
         'https://kaptaze.com',
-        'https://https://kaptaze.com/',
-        'https://www.kaptaze.com'
+        'https://www.kaptaze.com',
+        'http://localhost:8080',
+        'http://127.0.0.1:5500'
     ],
     credentials: true,
-    optionsSuccessStatus: 200
+    optionsSuccessStatus: 200,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 
-// Temporary: Allow all origins for development - REMOVE IN PRODUCTION
-if (process.env.NODE_ENV !== 'production') {
-    corsOptions.origin = '*';
-    corsOptions.credentials = false;
-}
+console.log('🌐 CORS Origins configured:', corsOptions.origin);
 
 app.use(cors(corsOptions));
 
