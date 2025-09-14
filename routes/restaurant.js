@@ -8,6 +8,7 @@ const { body, validationResult } = require('express-validator');
 const { authenticate, authorize } = require('../middleware/auth');
 const Restaurant = require('../models/Restaurant');
 const User = require('../models/User');
+const Package = require('../models/Package');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -433,15 +434,13 @@ router.patch('/packages/:packageId', async (req, res, next) => {
             });
         }
 
-        if (!restaurant.packages) {
-            return res.status(404).json({
-                success: false,
-                error: 'Package not found'
-            });
-        }
-
-        const packageIndex = restaurant.packages.findIndex(pkg => pkg.id === packageId);
-        if (packageIndex === -1) {
+        // Find package in Package collection
+        const packageDoc = await Package.findOne({ 
+            _id: packageId, 
+            restaurant: restaurant._id 
+        });
+        
+        if (!packageDoc) {
             return res.status(404).json({
                 success: false,
                 error: 'Package not found'
@@ -449,20 +448,19 @@ router.patch('/packages/:packageId', async (req, res, next) => {
         }
 
         // Update package fields
-        const allowedUpdates = ['name', 'description', 'price', 'category', 'status'];
+        const allowedUpdates = ['name', 'description', 'originalPrice', 'discountedPrice', 'category', 'status', 'quantity'];
         allowedUpdates.forEach(field => {
             if (req.body[field] !== undefined) {
-                restaurant.packages[packageIndex][field] = req.body[field];
+                packageDoc[field] = req.body[field];
             }
         });
 
-        restaurant.packages[packageIndex].updatedAt = new Date();
-        await restaurant.save();
+        await packageDoc.save();
 
         res.json({
             success: true,
             message: 'Package updated successfully',
-            data: restaurant.packages[packageIndex]
+            data: packageDoc
         });
 
     } catch (error) {
