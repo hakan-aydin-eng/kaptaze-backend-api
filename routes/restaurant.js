@@ -230,6 +230,9 @@ router.put('/me', [
     body('socialMedia.website').optional().trim().isURL().withMessage('Geçerli bir web sitesi URL\'si girin'),
     body('phone').optional().trim().matches(/^\+?[\d\s-()]+$/),
     body('openingHours').optional().isArray(),
+    body('operatingHours.open').optional().matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Açılış saati format: HH:MM'),
+    body('operatingHours.close').optional().matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Kapanış saati format: HH:MM'),
+    body('operatingHours.closed').optional().isBoolean(),
     body('deliveryInfo.radius').optional().isFloat({ min: 0, max: 50 }),
     body('deliveryInfo.fee').optional().isFloat({ min: 0 }),
     body('deliveryInfo.minimumOrder').optional().isFloat({ min: 0 }),
@@ -255,7 +258,7 @@ router.put('/me', [
 
         // Update allowed fields
         const allowedUpdates = [
-            'description', 'phone', 'openingHours', 'serviceOptions', 
+            'description', 'phone', 'openingHours', 'operatingHours', 'serviceOptions', 
             'deliveryInfo', 'socialMedia', 'settings', 'imageUrl'
         ];
 
@@ -392,7 +395,6 @@ router.post('/packages', [
             quantity: req.body.quantity || 1,
             category: req.body.category || 'general',
             tags: req.body.tags || [],
-            availableUntil: req.body.availableUntil ? new Date(req.body.availableUntil) : null,
             specialInstructions: req.body.specialInstructions || '',
             status: 'active',
             createdAt: new Date(),

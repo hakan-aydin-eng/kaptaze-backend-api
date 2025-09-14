@@ -107,6 +107,22 @@ const restaurantSchema = new mongoose.Schema({
     taxNumber: String,
     
     // Operational Information
+    operatingHours: {
+        open: {
+            type: String,
+            default: '09:00'
+        },
+        close: {
+            type: String,
+            default: '22:00'
+        },
+        closed: {
+            type: Boolean,
+            default: false
+        }
+    },
+    
+    // Keep old openingHours for backward compatibility
     openingHours: [{
         day: {
             type: String,
@@ -231,7 +247,7 @@ const restaurantSchema = new mongoose.Schema({
         quantity: {
             type: Number,
             default: 1,
-            min: 0
+            min: 1
         },
         category: {
             type: String,
@@ -242,9 +258,9 @@ const restaurantSchema = new mongoose.Schema({
             type: String,
             trim: true
         }],
-        availableUntil: {
-            type: Date
-        },
+        // availableUntil: {
+        //     type: Date
+        // },
         specialInstructions: {
             type: String,
             trim: true
