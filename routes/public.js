@@ -468,7 +468,7 @@ router.get('/featured-restaurants', async (req, res, next) => {
 
         // Transform data for frontend
         const featuredRestaurants = restaurants.map(restaurant => {
-            const activePackages = restaurant.packages?.filter(pkg => pkg.status === 'active') || [];
+            const activePackages = restaurant.packages?.filter(pkg => pkg.status === 'active' || pkg.status === 'last_package') || [];
             const discounts = activePackages.map(pkg => {
                 const originalPrice = pkg.originalPrice || pkg.price;
                 const discountPercentage = originalPrice > 0 ?
