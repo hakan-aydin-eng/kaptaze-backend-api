@@ -19,9 +19,9 @@ const orderSchema = new mongoose.Schema({
     total: { type: Number, required: true }
   }],
   totalAmount: { type: Number, required: true },
-  status: { 
-    type: String, 
-    enum: ['pending', 'preparing', 'ready', 'delivered', 'cancelled'],
+  status: {
+    type: String,
+    enum: ['pending', 'confirmed', 'ready', 'completed', 'cancelled', 'preparing', 'delivered'],
     default: 'pending'
   },
   paymentMethod: {
