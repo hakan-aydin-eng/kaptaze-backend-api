@@ -450,7 +450,20 @@ router.get('/cities', async (req, res, next) => {
 // @access  Public
 router.get('/featured-restaurants', async (req, res, next) => {
     try {
-        const { limit = 6 } = req.query;
+        const { limit = 6, debug } = req.query;
+
+        // Debug mode - show all restaurants
+        if (debug === 'true') {
+            const allRestaurants = await Restaurant.find({}).select('name status isVerified packages').limit(10);
+            return res.json({
+                success: true,
+                debug: true,
+                data: {
+                    restaurants: allRestaurants,
+                    count: allRestaurants.length
+                }
+            });
+        }
 
         // Find active, verified restaurants with active packages
         const restaurants = await Restaurant.find({
