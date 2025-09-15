@@ -456,7 +456,10 @@ router.get('/featured-restaurants', async (req, res, next) => {
         const restaurants = await Restaurant.find({
             status: 'active',
             isVerified: true,
-            'packages.0': { $exists: true } // Has at least one package
+            $or: [
+                { 'packages': { $elemMatch: { status: 'active' } } },
+                { 'packages': { $elemMatch: { status: 'last_package' } } }
+            ]
         })
         .select('name category address.city location rating stats images imageUrl profileImage packages')
         .sort({
