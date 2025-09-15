@@ -465,14 +465,10 @@ router.get('/featured-restaurants', async (req, res, next) => {
             });
         }
 
-        // Find active, verified restaurants with active packages
+        // Find active, verified restaurants (temporarily show all)
         const restaurants = await Restaurant.find({
             status: 'active',
-            isVerified: true,
-            $or: [
-                { 'packages': { $elemMatch: { status: 'active' } } },
-                { 'packages': { $elemMatch: { status: 'last_package' } } }
-            ]
+            isVerified: true
         })
         .select('name category address.city location rating stats images imageUrl profileImage packages')
         .sort({
