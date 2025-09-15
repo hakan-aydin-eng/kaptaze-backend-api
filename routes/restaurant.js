@@ -451,12 +451,18 @@ router.patch('/packages/:packageId', async (req, res, next) => {
         }
 
         // Update package fields
-        const allowedUpdates = ['name', 'description', 'price', 'category', 'status'];
+        const allowedUpdates = ['name', 'description', 'price', 'category', 'status', 'quantity'];
         allowedUpdates.forEach(field => {
             if (req.body[field] !== undefined) {
                 restaurant.packages[packageIndex][field] = req.body[field];
             }
         });
+
+        // Special handling for inactive status - ensure quantity is set properly
+        if (req.body.status === 'inactive' && req.body.quantity === undefined) {
+            // For inactive packages, set quantity to 1 to satisfy validation
+            restaurant.packages[packageIndex].quantity = 1;
+        }
 
         restaurant.packages[packageIndex].updatedAt = new Date();
         await restaurant.save();
