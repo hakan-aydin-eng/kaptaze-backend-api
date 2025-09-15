@@ -347,10 +347,12 @@ router.get('/packages', async (req, res, next) => {
             });
         }
 
-        // Return packages from restaurant model
+        // Filter out inactive packages for restaurant panel
+        const activePackages = (restaurant.packages || []).filter(pkg => pkg.status !== 'inactive');
+
         res.json({
             success: true,
-            data: restaurant.packages || []
+            data: activePackages
         });
 
     } catch (error) {
