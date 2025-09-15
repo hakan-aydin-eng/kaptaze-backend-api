@@ -570,4 +570,96 @@ router.patch('/profile', [
     }
 });
 
+// @route   POST /auth/push-token
+// @desc    Save consumer push notification token
+// @access  Private (Consumer)
+router.post('/push-token', [
+    body('token')
+        .notEmpty()
+        .withMessage('Push token is required'),
+    body('platform')
+        .isIn(['ios', 'android', 'web'])
+        .withMessage('Platform must be ios, android, or web'),
+    body('deviceInfo')
+        .optional()
+        .isObject()
+        .withMessage('Device info must be an object')
+], async (req, res, next) => {
+    try {
+        // Check for validation errors
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const { token, platform, deviceInfo } = req.body;
+
+        // Extract consumer info from request body (since mobile app may not have auth middleware)
+        let consumer;
+        if (req.body.consumerEmail) {
+            consumer = await Consumer.findOne({ email: req.body.consumerEmail });
+            if (!consumer) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Consumer not found'
+                });
+            }
+        } else if (req.user && req.user.userType === 'consumer') {
+            consumer = await Consumer.findById(req.user.id);
+        } else {
+            return res.status(401).json({
+                success: false,
+                error: 'Consumer authentication required'
+            });
+        }
+
+        // Check if this token already exists for this consumer
+        const existingTokenIndex = consumer.pushTokens.findIndex(
+            t => t.token === token && t.platform === platform
+        );
+
+        if (existingTokenIndex >= 0) {
+            // Update existing token
+            consumer.pushTokens[existingTokenIndex].active = true;
+            consumer.pushTokens[existingTokenIndex].lastUsed = new Date();
+            consumer.pushTokens[existingTokenIndex].deviceInfo = deviceInfo || consumer.pushTokens[existingTokenIndex].deviceInfo;
+        } else {
+            // Add new token
+            consumer.pushTokens.push({
+                token,
+                platform,
+                deviceInfo: deviceInfo || {},
+                active: true,
+                lastUsed: new Date()
+            });
+        }
+
+        // Limit to last 5 tokens per consumer (keep most recent)
+        if (consumer.pushTokens.length > 5) {
+            consumer.pushTokens.sort((a, b) => b.lastUsed - a.lastUsed);
+            consumer.pushTokens = consumer.pushTokens.slice(0, 5);
+        }
+
+        await consumer.save();
+
+        console.log(`🔔 Push token saved for consumer: ${consumer.name} ${consumer.surname} (${platform})`);
+
+        res.json({
+            success: true,
+            message: 'Push token saved successfully',
+            data: {
+                tokenCount: consumer.pushTokens.filter(t => t.active).length
+            }
+        });
+
+    } catch (error) {
+        console.error('Push token save error:', error);
+        next(error);
+    }
+});
+
 module.exports = router;

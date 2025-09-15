@@ -103,7 +103,20 @@ const consumerSchema = new mongoose.Schema({
         orders: { type: Boolean, default: true },
         promotions: { type: Boolean, default: true },
         news: { type: Boolean, default: false }
-    }
+    },
+
+    // Push notification tokens
+    pushTokens: [{
+        token: { type: String, required: true },
+        platform: { type: String, enum: ['ios', 'android', 'web'], required: true },
+        deviceInfo: {
+            brand: String,
+            model: String,
+            osVersion: String
+        },
+        active: { type: Boolean, default: true },
+        lastUsed: { type: Date, default: Date.now }
+    }]
 }, {
     timestamps: true,
     toJSON: { 

@@ -410,6 +410,30 @@ router.post('/packages', [
         restaurant.packages.push(newPackage);
         await restaurant.save();
 
+        // Send notification to users who favorited this restaurant
+        try {
+            const pushService = require('../services/pushNotificationService');
+
+            const notification = {
+                title: `${restaurant.name} yeni paket ekledi! 🍴`,
+                body: `${newPackage.name} - ${newPackage.discountedPrice || newPackage.price}₺`,
+                type: 'favorite_restaurant_package',
+                data: {
+                    restaurantId: restaurant._id.toString(),
+                    restaurantName: restaurant.name,
+                    packageId: newPackage.id,
+                    packageName: newPackage.name,
+                    packagePrice: newPackage.discountedPrice || newPackage.price
+                }
+            };
+
+            await pushService.sendToRestaurantFavorites(restaurant._id, notification);
+            console.log(`📱 Notification sent to users who favorited ${restaurant.name}`);
+        } catch (notificationError) {
+            console.error('Failed to send favorite restaurant notification:', notificationError);
+            // Don't fail the package creation if notification fails
+        }
+
         res.json({
             success: true,
             message: 'Package added successfully',

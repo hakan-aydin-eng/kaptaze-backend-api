@@ -414,6 +414,16 @@ router.post('/applications/:applicationId/approve', [
         restaurantUser.restaurantId = restaurant._id;
         await restaurantUser.save();
 
+        // Send location-based notification for new restaurant
+        try {
+            const locationService = require('../services/locationNotificationService');
+            await locationService.notifyNearbyConsumersOfNewRestaurant(restaurant);
+            console.log(`📱 Location-based notifications sent for new restaurant: ${restaurant.name}`);
+        } catch (notificationError) {
+            console.error('Failed to send location-based notifications:', notificationError);
+            // Don't fail the restaurant creation if notification fails
+        }
+
         // Update application
         application.status = 'approved';
         application.reviewedBy = createdByValue;
@@ -1742,6 +1752,268 @@ router.delete('/packages/:packageId', async (req, res, next) => {
         }
 
     } catch (error) {
+        next(error);
+    }
+});
+
+// @route   POST /admin/notifications/send
+// @desc    Send push notification from admin panel
+// @access  Private (Admin)
+router.post('/notifications/send', [
+    body('type')
+        .isIn(['genel', 'promosyon', 'şehir', 'restoran', 'test'])
+        .withMessage('Invalid notification type'),
+    body('title')
+        .notEmpty()
+        .withMessage('Title is required')
+        .isLength({ max: 100 })
+        .withMessage('Title cannot exceed 100 characters'),
+    body('message')
+        .notEmpty()
+        .withMessage('Message is required')
+        .isLength({ max: 500 })
+        .withMessage('Message cannot exceed 500 characters'),
+    body('priority')
+        .optional()
+        .isIn(['low', 'normal', 'high'])
+        .withMessage('Priority must be low, normal, or high'),
+    body('targetData')
+        .optional()
+        .isObject()
+        .withMessage('Target data must be an object')
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const { type, title, message, priority = 'normal', targetData = {} } = req.body;
+        const pushService = require('../services/pushNotificationService');
+
+        console.log(`📤 Admin sending ${type} notification: ${title}`);
+
+        let result;
+
+        // Handle different notification types
+        switch (type) {
+            case 'genel':
+                // Send to all active consumers
+                result = await pushService.sendToAllConsumers(
+                    { title, body: message, type, priority },
+                    { orders: true, promotions: true } // Send to users who accept general notifications
+                );
+                break;
+
+            case 'promosyon':
+                // Send to consumers who accept promotions
+                result = await pushService.sendToAllConsumers(
+                    { title, body: message, type, priority },
+                    { promotions: true }
+                );
+                break;
+
+            case 'şehir':
+                // Send to consumers in specific city/location
+                if (targetData.latitude && targetData.longitude) {
+                    const radiusKm = targetData.radiusKm || 5;
+                    result = await pushService.sendToNearbyConsumers(
+                        targetData.latitude,
+                        targetData.longitude,
+                        { title, body: message, type, priority },
+                        radiusKm
+                    );
+                } else {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'City notifications require latitude and longitude'
+                    });
+                }
+                break;
+
+            case 'restoran':
+                // Send to consumers who favorited specific restaurant
+                if (targetData.restaurantId) {
+                    result = await pushService.sendToRestaurantFavorites(
+                        targetData.restaurantId,
+                        { title, body: message, type, priority }
+                    );
+                } else {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Restaurant notifications require restaurantId'
+                    });
+                }
+                break;
+
+            case 'test':
+                // Send test notification to admin or specific user
+                const testEmail = targetData.email || 'admin@kaptaze.com';
+                result = await pushService.testNotification(testEmail);
+                break;
+
+            default:
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid notification type'
+                });
+        }
+
+        // Log notification in database (optional - you can create a Notification model)
+        console.log(`✅ ${type} notification sent:`, result);
+
+        res.json({
+            success: true,
+            message: `${type.charAt(0).toUpperCase() + type.slice(1)} bildirimi başarıyla gönderildi`,
+            data: {
+                type,
+                title,
+                message,
+                priority,
+                ...result
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Admin notification send error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to send notification',
+            details: error.message
+        });
+    }
+});
+
+// @route   POST /admin/notifications/test
+// @desc    Send test push notification
+// @access  Private (Admin)
+router.post('/notifications/test', [
+    body('email')
+        .optional()
+        .isEmail()
+        .withMessage('Please enter a valid email address')
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const { email } = req.body;
+        const testEmail = email || 'admin@kaptaze.com';
+
+        const pushService = require('../services/pushNotificationService');
+        const result = await pushService.testNotification(testEmail);
+
+        res.json({
+            success: true,
+            message: 'Test bildirimi gönderildi',
+            data: {
+                email: testEmail,
+                ...result
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Test notification error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Test notification failed',
+            details: error.message
+        });
+    }
+});
+
+// @route   GET /admin/notifications/stats
+// @desc    Get push notification statistics
+// @access  Private (Admin)
+router.get('/notifications/stats', async (req, res, next) => {
+    try {
+        // Get consumer statistics for notifications
+        const totalConsumers = await Consumer.countDocuments({ status: 'active' });
+        const consumersWithTokens = await Consumer.countDocuments({
+            status: 'active',
+            'pushTokens.0': { $exists: true }
+        });
+
+        // Count active push tokens
+        const activeTokensResult = await Consumer.aggregate([
+            { $match: { status: 'active' } },
+            { $unwind: '$pushTokens' },
+            { $match: { 'pushTokens.active': true } },
+            {
+                $group: {
+                    _id: '$pushTokens.platform',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const activeTokensByPlatform = {
+            ios: 0,
+            android: 0,
+            web: 0
+        };
+
+        activeTokensResult.forEach(result => {
+            activeTokensByPlatform[result._id] = result.count;
+        });
+
+        const totalActiveTokens = Object.values(activeTokensByPlatform).reduce((a, b) => a + b, 0);
+
+        // Get notification preferences statistics
+        const notificationPrefs = await Consumer.aggregate([
+            { $match: { status: 'active' } },
+            {
+                $group: {
+                    _id: null,
+                    ordersEnabled: { $sum: { $cond: ['$notifications.orders', 1, 0] } },
+                    promotionsEnabled: { $sum: { $cond: ['$notifications.promotions', 1, 0] } },
+                    newsEnabled: { $sum: { $cond: ['$notifications.news', 1, 0] } }
+                }
+            }
+        ]);
+
+        const preferences = notificationPrefs[0] || {
+            ordersEnabled: 0,
+            promotionsEnabled: 0,
+            newsEnabled: 0
+        };
+
+        res.json({
+            success: true,
+            data: {
+                consumers: {
+                    total: totalConsumers,
+                    withPushTokens: consumersWithTokens,
+                    percentage: totalConsumers > 0 ? Math.round((consumersWithTokens / totalConsumers) * 100) : 0
+                },
+                pushTokens: {
+                    total: totalActiveTokens,
+                    byPlatform: activeTokensByPlatform
+                },
+                preferences: {
+                    orders: preferences.ordersEnabled,
+                    promotions: preferences.promotionsEnabled,
+                    news: preferences.newsEnabled
+                },
+                firebase: {
+                    configured: !!process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
+                    mock: !process.env.FIREBASE_SERVICE_ACCOUNT_KEY
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Notification stats error:', error);
         next(error);
     }
 });
