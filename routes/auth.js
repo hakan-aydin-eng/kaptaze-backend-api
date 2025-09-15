@@ -322,7 +322,7 @@ router.post('/register', [
         if (existingConsumer) {
             return res.status(409).json({
                 success: false,
-                error: 'A user with this email already exists'
+                error: 'Bu e-posta adresi ile zaten kayıtlı bir hesap bulunmaktadır'
             });
         }
 
