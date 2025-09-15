@@ -7,10 +7,153 @@ const { sendOrderNotification } = require('../services/emailService');
 
 // Test endpoint
 router.get('/test', (req, res) => {
-    res.json({ 
-        message: 'Orders API is working!', 
-        timestamp: new Date().toISOString() 
+    res.json({
+        message: 'Orders API is working!',
+        timestamp: new Date().toISOString()
     });
+});
+
+// Create new order - alias for /create endpoint (for mobile app compatibility)
+router.post('/', async (req, res) => {
+    try {
+        console.log('Received order request at /orders root:', req.body);
+
+        const {
+            customer,
+            restaurantId,
+            items,
+            totalAmount,
+            paymentMethod,
+            notes
+        } = req.body;
+
+        console.log('Looking for restaurant with ID:', restaurantId);
+
+        // Get restaurant details
+        const restaurant = await Restaurant.findById(restaurantId);
+        console.log('Found restaurant:', restaurant ? restaurant.name : 'null');
+
+        if (!restaurant) {
+            console.log('Restaurant not found with ID:', restaurantId);
+            return res.status(404).json({ error: 'Restaurant not found' });
+        }
+
+        // Check stock availability for each item
+        const stockErrors = [];
+        const packageUpdates = [];
+
+        for (const orderItem of items) {
+            const packageId = orderItem.id || orderItem.productId;
+            console.log(`🔍 Checking stock for package ID: ${packageId}, quantity needed: ${orderItem.quantity}`);
+
+            // Find the package in restaurant's packages array
+            const packageIndex = restaurant.packages.findIndex(pkg => pkg.id === packageId && pkg.status === 'active');
+
+            if (packageIndex === -1) {
+                stockErrors.push(`Package ${orderItem.name} not found or inactive`);
+                continue;
+            }
+
+            const package = restaurant.packages[packageIndex];
+            console.log(`📦 Package ${package.name} - Current stock: ${package.quantity}, Requested: ${orderItem.quantity}`);
+
+            // Check if enough stock available
+            if (package.quantity < orderItem.quantity) {
+                stockErrors.push(`${package.name} - Sadece ${package.quantity} adet kaldı (${orderItem.quantity} adet istendi)`);
+                continue;
+            }
+
+            // Prepare stock update
+            packageUpdates.push({
+                packageIndex: packageIndex,
+                newQuantity: package.quantity - orderItem.quantity
+            });
+        }
+
+        // If there are stock errors, return them
+        if (stockErrors.length > 0) {
+            console.log('Stock errors found:', stockErrors);
+            return res.status(400).json({
+                error: 'Stock not available',
+                details: stockErrors
+            });
+        }
+
+        // Create order object
+        const orderData = {
+            customer: customer,
+            restaurantId: restaurantId,
+            restaurant: restaurant.name,
+            items: items,
+            totalAmount: totalAmount,
+            paymentMethod: paymentMethod || 'cash',
+            notes: notes,
+            status: 'pending',
+            orderDate: new Date(),
+            pickupCode: `KB${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`
+        };
+
+        console.log('Creating order with data:', orderData);
+
+        // Save order to database
+        const order = new Order(orderData);
+        const savedOrder = await order.save();
+
+        // Update package quantities
+        for (const update of packageUpdates) {
+            restaurant.packages[update.packageIndex].quantity = update.newQuantity;
+            console.log(`📦 Updated ${restaurant.packages[update.packageIndex].name} stock to ${update.newQuantity}`);
+        }
+
+        await restaurant.save();
+        console.log('✅ Restaurant package quantities updated');
+
+        // Send notification to restaurant via Socket.IO
+        const io = req.app.get('io');
+        const restaurantSockets = req.app.get('restaurantSockets');
+
+        if (io && restaurantSockets.has(restaurantId)) {
+            console.log(`📡 Sending real-time notification to restaurant ${restaurantId}`);
+            io.to(`restaurant-${restaurantId}`).emit('newOrder', {
+                order: savedOrder,
+                message: 'Yeni sipariş aldınız!'
+            });
+        }
+
+        // Send email notification
+        try {
+            console.log('📧 Sending email notification...');
+            await sendOrderNotification({
+                restaurantEmail: restaurant.email,
+                restaurantName: restaurant.name,
+                customerName: customer.name,
+                orderDetails: items,
+                totalAmount: totalAmount,
+                pickupCode: savedOrder.pickupCode,
+                notes: notes
+            });
+            console.log('✅ Email notification sent successfully');
+        } catch (emailError) {
+            console.error('❌ Email notification failed:', emailError);
+            // Don't fail the order if email fails
+        }
+
+        console.log('✅ Order created successfully:', savedOrder._id);
+
+        res.status(200).json({
+            success: true,
+            message: 'Order placed successfully',
+            orderId: savedOrder._id,
+            data: savedOrder
+        });
+
+    } catch (error) {
+        console.error('❌ Error creating order:', error);
+        res.status(500).json({
+            error: 'Failed to create order',
+            message: error.message
+        });
+    }
 });
 
 // Create new order from mobile app
