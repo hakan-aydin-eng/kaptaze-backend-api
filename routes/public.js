@@ -445,6 +445,28 @@ router.get('/cities', async (req, res, next) => {
     }
 });
 
+// Test endpoint
+router.get('/test-restaurants', async (req, res, next) => {
+    try {
+        const total = await Restaurant.countDocuments();
+        const active = await Restaurant.countDocuments({ status: 'active' });
+        const verified = await Restaurant.countDocuments({ isVerified: true });
+        const activeAndVerified = await Restaurant.countDocuments({ status: 'active', isVerified: true });
+
+        const sampleRestaurants = await Restaurant.find({ status: 'active', isVerified: true })
+            .select('name status isVerified packages')
+            .limit(3);
+
+        res.json({
+            success: true,
+            stats: { total, active, verified, activeAndVerified },
+            sampleRestaurants
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // @route   GET /public/featured-restaurants
 // @desc    Get featured restaurants for homepage (approved restaurants with active packages)
 // @access  Public
