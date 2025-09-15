@@ -82,8 +82,10 @@ router.post('/', async (req, res) => {
         // Create order object
         const orderData = {
             customer: customer,
-            restaurantId: restaurantId,
-            restaurant: restaurant.name,
+            restaurant: {
+                id: restaurant._id,
+                name: restaurant.name
+            },
             items: items,
             totalAmount: totalAmount,
             paymentMethod: paymentMethod || 'cash',
