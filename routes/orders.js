@@ -45,16 +45,35 @@ router.post('/', async (req, res) => {
         for (const orderItem of items) {
             const packageId = orderItem.id || orderItem.productId;
             console.log(`🔍 Checking stock for package ID: ${packageId}, quantity needed: ${orderItem.quantity}`);
+            console.log(`📦 Available packages in restaurant:`, restaurant.packages.map(pkg => ({
+                id: pkg.id,
+                _id: pkg._id,
+                name: pkg.name,
+                status: pkg.status,
+                quantity: pkg.quantity
+            })));
 
-            // Find the package in restaurant's packages array
-            const packageIndex = restaurant.packages.findIndex(pkg => pkg.id === packageId && pkg.status === 'active');
+            // Find the package in restaurant's packages array - check multiple ID formats
+            const packageIndex = restaurant.packages.findIndex(pkg =>
+                (pkg.id === packageId || pkg._id === packageId || pkg.id?.toString() === packageId || pkg._id?.toString() === packageId)
+            );
 
             if (packageIndex === -1) {
+                console.log(`❌ Package not found with ID: ${packageId}`);
                 stockErrors.push(`Package ${orderItem.name} not found or inactive`);
                 continue;
             }
 
             const package = restaurant.packages[packageIndex];
+            console.log(`📦 Found package: ${package.name}, Status: ${package.status}, Stock: ${package.quantity}`);
+
+            // Check if package is active (remove strict status check for now)
+            if (package.status === 'inactive') {
+                console.log(`⚠️ Package ${package.name} is inactive`);
+                stockErrors.push(`Package ${orderItem.name} is not available`);
+                continue;
+            }
+
             console.log(`📦 Package ${package.name} - Current stock: ${package.quantity}, Requested: ${orderItem.quantity}`);
 
             // Check if enough stock available
