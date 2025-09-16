@@ -14,15 +14,43 @@ class PushNotificationService {
     init() {
         try {
             // Initialize Firebase Admin SDK
-            // In production, use Firebase service account key
             if (!admin.apps.length) {
-                // For development, you can initialize without credentials for testing
-                // In production, set FIREBASE_SERVICE_ACCOUNT_KEY environment variable
+                let serviceAccount = null;
+
+                // Try full JSON first (for local development)
                 if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-                    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+                    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+                }
+                // Try separate environment variables (for Render deployment)
+                else if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY) {
+                    // Combine private key parts if they're split
+                    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+                    if (process.env.FIREBASE_PRIVATE_KEY_1) {
+                        privateKey = process.env.FIREBASE_PRIVATE_KEY_1 +
+                                   (process.env.FIREBASE_PRIVATE_KEY_2 || '') +
+                                   (process.env.FIREBASE_PRIVATE_KEY_3 || '');
+                    }
+
+                    serviceAccount = {
+                        type: "service_account",
+                        project_id: process.env.FIREBASE_PROJECT_ID,
+                        private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+                        private_key: privateKey.replace(/\\n/g, '\n'), // Convert escaped newlines
+                        client_email: process.env.FIREBASE_CLIENT_EMAIL,
+                        client_id: process.env.FIREBASE_CLIENT_ID,
+                        auth_uri: "https://accounts.google.com/o/oauth2/auth",
+                        token_uri: "https://oauth2.googleapis.com/token",
+                        auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+                        client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${encodeURIComponent(process.env.FIREBASE_CLIENT_EMAIL)}`,
+                        universe_domain: "googleapis.com"
+                    };
+                }
+
+                if (serviceAccount) {
                     admin.initializeApp({
                         credential: admin.credential.cert(serviceAccount)
                     });
+                    console.log('✅ Firebase Admin SDK initialized from environment variables');
                 } else {
                     console.log('⚠️ Firebase service account key not found. Push notifications will be mocked.');
                     this.initialized = false;
