@@ -15,15 +15,29 @@ const router = express.Router();
 
 // Debug middleware for all auth routes
 router.use((req, res, next) => {
-    if (req.path === '/push-token-v2' && req.method === 'POST') {
-        console.log('🚨 PUSH TOKEN V2 REQUEST INTERCEPTED:', {
+    if ((req.path === '/push-token-v2' || req.path === '/push-token') && req.method === 'POST') {
+        console.log('🚨 PUSH TOKEN REQUEST INTERCEPTED:', {
             method: req.method,
             path: req.path,
             fullUrl: req.originalUrl,
-            headers: req.headers,
+            contentType: req.headers['content-type'],
             body: req.body,
+            bodyKeys: Object.keys(req.body || {}),
+            rawBody: req.rawBody || 'No raw body',
+            bodyLength: req.headers['content-length'],
             timestamp: new Date().toISOString()
         });
+
+        // Check if body is empty and try to parse rawBody if available
+        if ((!req.body || Object.keys(req.body).length === 0) && req.rawBody) {
+            try {
+                console.log('🔧 Attempting to parse rawBody:', req.rawBody);
+                req.body = JSON.parse(req.rawBody);
+                console.log('✅ Successfully parsed rawBody:', req.body);
+            } catch (error) {
+                console.log('❌ Failed to parse rawBody:', error.message);
+            }
+        }
     }
     next();
 });
