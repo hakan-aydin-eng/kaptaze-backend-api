@@ -113,19 +113,42 @@ const limiter = rateLimit({
 // app.use(limiter);  // TEMPORARILY DISABLED FOR TESTING
 
 // Body Parser Middleware with UTF-8 support
-app.use(express.json({ 
+app.use(express.json({
     limit: '10mb',
-    type: 'application/json',
+    type: ['application/json', 'text/plain'],
     verify: (req, res, buf) => {
         req.rawBody = buf.toString('utf8');
     }
 }));
-app.use(express.urlencoded({ 
-    extended: true, 
+app.use(express.urlencoded({
+    extended: true,
     limit: '10mb',
     parameterLimit: 1000,
     type: 'application/x-www-form-urlencoded'
 }));
+
+// Additional middleware to handle iOS text/plain requests
+app.use((req, res, next) => {
+    const contentType = req.headers['content-type'];
+    if (contentType && contentType.includes('text/plain') && req.rawBody) {
+        try {
+            // Try to parse the raw body as JSON for iOS requests
+            const parsedBody = JSON.parse(req.rawBody);
+            req.body = parsedBody;
+            console.log('🍎 iOS text/plain body parsed successfully:', {
+                contentType,
+                parsedKeys: Object.keys(parsedBody)
+            });
+        } catch (error) {
+            console.log('⚠️ Could not parse text/plain body as JSON:', {
+                contentType,
+                rawBody: req.rawBody,
+                error: error.message
+            });
+        }
+    }
+    next();
+});
 
 // UTF-8 Encoding for Turkish Characters
 app.use((req, res, next) => {

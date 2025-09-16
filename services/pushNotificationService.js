@@ -13,13 +13,34 @@ class PushNotificationService {
 
     init() {
         try {
+            console.log('🔥 Firebase initialization debug:', {
+                hasFullKey: !!process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
+                hasBase64Key: !!process.env.FIREBASE_SERVICE_ACCOUNT_BASE64,
+                hasProjectId: !!process.env.FIREBASE_PROJECT_ID,
+                hasPrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
+                hasPrivateKeyBase64: !!process.env.FIREBASE_PRIVATE_KEY_BASE64,
+                envKeys: Object.keys(process.env).filter(key => key.includes('FIREBASE')),
+                adminAppsLength: admin.apps.length
+            });
+
             // Initialize Firebase Admin SDK
             if (!admin.apps.length) {
                 let serviceAccount = null;
 
-                // Try full JSON first (for local development)
-                if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+                // Try Base64 encoded full service account first (for Render)
+                if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+                    try {
+                        const decoded = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf-8');
+                        serviceAccount = JSON.parse(decoded);
+                        console.log('✅ Using Base64 decoded Firebase service account');
+                    } catch (error) {
+                        console.error('❌ Failed to decode Base64 service account:', error.message);
+                    }
+                }
+                // Try full JSON (for local development)
+                else if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
                     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+                    console.log('✅ Using full JSON Firebase service account');
                 }
                 // Try separate environment variables (for Render deployment)
                 else if (process.env.FIREBASE_PROJECT_ID && (process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY_BASE64)) {
