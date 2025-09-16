@@ -573,18 +573,7 @@ router.patch('/profile', [
 // @route   POST /auth/push-token
 // @desc    Save consumer push notification token
 // @access  Private (Consumer)
-router.post('/push-token', [
-    body('token')
-        .notEmpty()
-        .withMessage('Push token is required'),
-    body('platform')
-        .isIn(['ios', 'android', 'web'])
-        .withMessage('Platform must be ios, android, or web'),
-    body('deviceInfo')
-        .optional()
-        .isObject()
-        .withMessage('Device info must be an object')
-], async (req, res, next) => {
+router.post('/push-token', async (req, res, next) => {
     try {
         // Debug log for push token validation
         console.log('🔍 Push token request body:', {
@@ -594,18 +583,22 @@ router.post('/push-token', [
             deviceInfo: req.body.deviceInfo
         });
 
-        // Check for validation errors
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-            console.error('❌ Push token validation errors:', errors.array());
+        // Manual validation
+        const { token, platform, deviceInfo } = req.body;
+
+        if (!token || typeof token !== 'string') {
             return res.status(400).json({
                 success: false,
-                error: 'Validation failed',
-                errors: errors.array()
+                error: 'Push token is required and must be a string'
             });
         }
 
-        const { token, platform, deviceInfo } = req.body;
+        if (!platform || !['ios', 'android', 'web'].includes(platform)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Platform must be ios, android, or web'
+            });
+        }
 
         // Extract consumer info from request body (since mobile app may not have auth middleware)
         let consumer;
