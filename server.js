@@ -221,6 +221,10 @@ const startServer = async () => {
         const Order = require('./models/Order');
         await Order.cleanupIndexes();
         
+        // Initialize Push Notification Service
+        const pushNotificationService = require('./services/pushNotificationService');
+        console.log('🔔 Push Notification Service initialized');
+
         // Start the server with Socket.IO
         server.listen(PORT, () => {
             console.log('\n🚀 KapTaze API Server Started!');
@@ -229,6 +233,7 @@ const startServer = async () => {
             console.log(`🔗 Health check: http://localhost:${PORT}/health`);
             console.log(`📚 API docs: http://localhost:${PORT}/`);
             console.log(`🔌 Socket.IO: Enabled`);
+            console.log('🔔 Push Notifications: Ready');
             console.log('════════════════════════════════════════\n');
         });
     } catch (error) {

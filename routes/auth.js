@@ -827,4 +827,40 @@ router.post('/push-token-v2', async (req, res, next) => {
     }
 });
 
+// Test push notification endpoint (temporary for debugging)
+router.post('/test-push', async (req, res) => {
+    try {
+        const { consumerEmail = 'hakan-aydin@live.com' } = req.body;
+
+        console.log('🧪 Testing push notification for:', consumerEmail);
+
+        const pushService = require('../services/pushNotificationService');
+
+        const testNotification = {
+            title: '🎉 Firebase Test Success!',
+            body: 'Push notification system is now working!',
+            type: 'test',
+            data: {
+                action: 'test',
+                timestamp: new Date().toISOString()
+            }
+        };
+
+        const result = await pushService.sendToConsumer(consumerEmail, testNotification);
+
+        res.status(200).json({
+            success: true,
+            message: 'Test notification sent successfully',
+            result: result
+        });
+
+    } catch (error) {
+        console.error('❌ Test push notification error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;

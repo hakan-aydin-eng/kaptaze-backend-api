@@ -1775,8 +1775,8 @@ router.post('/notifications/send', [
         .withMessage('Message cannot exceed 500 characters'),
     body('priority')
         .optional()
-        .isIn(['low', 'normal', 'high'])
-        .withMessage('Priority must be low, normal, or high'),
+        .isIn(['low', 'normal', 'high', 'urgent'])
+        .withMessage('Priority must be low, normal, high, or urgent'),
     body('targetData')
         .optional()
         .isObject()

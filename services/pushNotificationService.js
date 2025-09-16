@@ -79,7 +79,8 @@ class PushNotificationService {
         }
 
         try {
-            const message = {
+            // Use sendEach instead of sendMulticast for multiple tokens
+            const messages = tokens.map(token => ({
                 notification: {
                     title: notification.title,
                     body: notification.body,
@@ -90,10 +91,10 @@ class PushNotificationService {
                     timestamp: new Date().toISOString(),
                     ...notification.data
                 },
-                tokens: tokens
-            };
+                token: token
+            }));
 
-            const response = await this.messaging.sendMulticast(message);
+            const response = await this.messaging.sendEach(messages);
 
             console.log(`🔔 Push notification sent successfully: ${response.successCount}/${tokens.length}`);
 
