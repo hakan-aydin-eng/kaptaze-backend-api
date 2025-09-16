@@ -601,15 +601,19 @@ router.post('/push-token', async (req, res, next) => {
             url: req.url
         });
 
-        // Manual validation
-        const { token, platform, deviceInfo } = req.body;
+        // Manual validation with direct property access
+        const token = req.body.token;
+        const platform = req.body.platform;
+        const deviceInfo = req.body.deviceInfo;
 
         console.log('🔍 Token validation debug:', {
             token: token,
             tokenType: typeof token,
             tokenExists: !!token,
             platform: platform,
-            platformType: typeof platform
+            platformType: typeof platform,
+            allBodyKeys: Object.keys(req.body || {}),
+            fullBodyString: JSON.stringify(req.body)
         });
 
         if (!token || typeof token !== 'string') {
@@ -711,15 +715,19 @@ router.post('/push-token-v2', async (req, res, next) => {
             url: req.url
         });
 
-        // Manual validation
-        const { token, platform, deviceInfo } = req.body;
+        // Manual validation with direct property access
+        const token = req.body.token;
+        const platform = req.body.platform;
+        const deviceInfo = req.body.deviceInfo;
 
         console.log('🔍 Token validation debug:', {
             token: token,
             tokenType: typeof token,
             tokenExists: !!token,
             platform: platform,
-            platformType: typeof platform
+            platformType: typeof platform,
+            allBodyKeys: Object.keys(req.body || {}),
+            fullBodyString: JSON.stringify(req.body)
         });
 
         if (!token || typeof token !== 'string') {
