@@ -586,9 +586,18 @@ router.post('/push-token', [
         .withMessage('Device info must be an object')
 ], async (req, res, next) => {
     try {
+        // Debug log for push token validation
+        console.log('🔍 Push token request body:', {
+            fullBody: req.body,
+            token: req.body.token,
+            platform: req.body.platform,
+            deviceInfo: req.body.deviceInfo
+        });
+
         // Check for validation errors
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
+            console.error('❌ Push token validation errors:', errors.array());
             return res.status(400).json({
                 success: false,
                 error: 'Validation failed',
