@@ -15,8 +15,8 @@ const router = express.Router();
 
 // Debug middleware for all auth routes
 router.use((req, res, next) => {
-    if (req.path === '/push-token' && req.method === 'POST') {
-        console.log('🚨 PUSH TOKEN REQUEST INTERCEPTED:', {
+    if (req.path === '/push-token-v2' && req.method === 'POST') {
+        console.log('🚨 PUSH TOKEN V2 REQUEST INTERCEPTED:', {
             method: req.method,
             path: req.path,
             fullUrl: req.originalUrl,
@@ -588,7 +588,7 @@ router.patch('/profile', [
 // @route   POST /auth/push-token
 // @desc    Save consumer push notification token
 // @access  Private (Consumer)
-router.post('/push-token', async (req, res, next) => {
+router.post('/push-token-v2', async (req, res, next) => {
     try {
         // Debug log for push token validation
         console.log('🔍 Push token request debug:', {
