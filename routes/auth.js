@@ -13,6 +13,21 @@ const { sendWelcomeEmail } = require('../services/emailService');
 
 const router = express.Router();
 
+// Debug middleware for all auth routes
+router.use((req, res, next) => {
+    if (req.path === '/push-token' && req.method === 'POST') {
+        console.log('🚨 PUSH TOKEN REQUEST INTERCEPTED:', {
+            method: req.method,
+            path: req.path,
+            fullUrl: req.originalUrl,
+            headers: req.headers,
+            body: req.body,
+            timestamp: new Date().toISOString()
+        });
+    }
+    next();
+});
+
 // Generate JWT Token
 const generateToken = (user, userType = 'user') => {
     const payload = { 
