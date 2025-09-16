@@ -588,6 +588,116 @@ router.patch('/profile', [
 // @route   POST /auth/push-token
 // @desc    Save consumer push notification token
 // @access  Private (Consumer)
+router.post('/push-token', async (req, res, next) => {
+    try {
+        // Debug log for push token validation
+        console.log('🔍 Push token request debug:', {
+            fullBody: req.body,
+            bodyType: typeof req.body,
+            bodyKeys: Object.keys(req.body || {}),
+            rawHeaders: req.headers,
+            contentType: req.headers['content-type'],
+            method: req.method,
+            url: req.url
+        });
+
+        // Manual validation
+        const { token, platform, deviceInfo } = req.body;
+
+        console.log('🔍 Token validation debug:', {
+            token: token,
+            tokenType: typeof token,
+            tokenExists: !!token,
+            platform: platform,
+            platformType: typeof platform
+        });
+
+        if (!token || typeof token !== 'string') {
+            return res.status(400).json({
+                success: false,
+                error: 'Push token is required and must be a string',
+                debug: {
+                    token: token,
+                    tokenType: typeof token,
+                    tokenExists: !!token
+                }
+            });
+        }
+
+        if (!platform || !['ios', 'android', 'web'].includes(platform)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Platform must be ios, android, or web'
+            });
+        }
+
+        // Extract consumer info from request body (since mobile app may not have auth middleware)
+        let consumer;
+        if (req.body.consumerEmail) {
+            consumer = await Consumer.findOne({ email: req.body.consumerEmail });
+            if (!consumer) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Consumer not found'
+                });
+            }
+        } else if (req.user && req.user.userType === 'consumer') {
+            consumer = await Consumer.findById(req.user.id);
+        } else {
+            return res.status(401).json({
+                success: false,
+                error: 'Consumer authentication required'
+            });
+        }
+
+        // Check if this token already exists for this consumer
+        const existingTokenIndex = consumer.pushTokens.findIndex(
+            t => t.token === token && t.platform === platform
+        );
+
+        if (existingTokenIndex >= 0) {
+            // Update existing token
+            consumer.pushTokens[existingTokenIndex].active = true;
+            consumer.pushTokens[existingTokenIndex].lastUsed = new Date();
+            consumer.pushTokens[existingTokenIndex].deviceInfo = deviceInfo || consumer.pushTokens[existingTokenIndex].deviceInfo;
+        } else {
+            // Add new token
+            consumer.pushTokens.push({
+                token,
+                platform,
+                deviceInfo: deviceInfo || {},
+                active: true,
+                lastUsed: new Date()
+            });
+        }
+
+        // Limit to last 5 tokens per consumer (keep most recent)
+        if (consumer.pushTokens.length > 5) {
+            consumer.pushTokens.sort((a, b) => b.lastUsed - a.lastUsed);
+            consumer.pushTokens = consumer.pushTokens.slice(0, 5);
+        }
+
+        await consumer.save();
+
+        console.log(`🔔 Push token saved for consumer: ${consumer.name} ${consumer.surname} (${platform})`);
+
+        res.json({
+            success: true,
+            message: 'Push token saved successfully',
+            data: {
+                tokenCount: consumer.pushTokens.filter(t => t.active).length
+            }
+        });
+
+    } catch (error) {
+        console.error('Push token save error:', error);
+        next(error);
+    }
+});
+
+// @route   POST /auth/push-token-v2 (Alternative endpoint)
+// @desc    Save consumer push notification token
+// @access  Private (Consumer)
 router.post('/push-token-v2', async (req, res, next) => {
     try {
         // Debug log for push token validation
