@@ -576,11 +576,14 @@ router.patch('/profile', [
 router.post('/push-token', async (req, res, next) => {
     try {
         // Debug log for push token validation
-        console.log('🔍 Push token request body:', {
+        console.log('🔍 Push token request debug:', {
             fullBody: req.body,
-            token: req.body.token,
-            platform: req.body.platform,
-            deviceInfo: req.body.deviceInfo
+            bodyType: typeof req.body,
+            bodyKeys: Object.keys(req.body || {}),
+            rawHeaders: req.headers,
+            contentType: req.headers['content-type'],
+            method: req.method,
+            url: req.url
         });
 
         // Manual validation
