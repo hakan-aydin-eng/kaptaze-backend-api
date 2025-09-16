@@ -22,20 +22,36 @@ class PushNotificationService {
                     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
                 }
                 // Try separate environment variables (for Render deployment)
-                else if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY) {
-                    // Combine private key parts if they're split
-                    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
-                    if (process.env.FIREBASE_PRIVATE_KEY_1) {
-                        privateKey = process.env.FIREBASE_PRIVATE_KEY_1 +
-                                   (process.env.FIREBASE_PRIVATE_KEY_2 || '') +
-                                   (process.env.FIREBASE_PRIVATE_KEY_3 || '');
+                else if (process.env.FIREBASE_PROJECT_ID && (process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY_BASE64)) {
+                    let privateKey = '';
+
+                    // Handle Base64 encoded private key (recommended for Render)
+                    if (process.env.FIREBASE_PRIVATE_KEY_BASE64) {
+                        try {
+                            privateKey = Buffer.from(process.env.FIREBASE_PRIVATE_KEY_BASE64, 'base64').toString('utf-8');
+                            console.log('🔑 Using Base64 decoded Firebase private key');
+                        } catch (error) {
+                            console.error('❌ Failed to decode Base64 private key:', error.message);
+                            throw error;
+                        }
+                    }
+                    // Fallback to regular private key
+                    else if (process.env.FIREBASE_PRIVATE_KEY) {
+                        // Combine private key parts if they're split
+                        privateKey = process.env.FIREBASE_PRIVATE_KEY;
+                        if (process.env.FIREBASE_PRIVATE_KEY_1) {
+                            privateKey = process.env.FIREBASE_PRIVATE_KEY_1 +
+                                       (process.env.FIREBASE_PRIVATE_KEY_2 || '') +
+                                       (process.env.FIREBASE_PRIVATE_KEY_3 || '');
+                        }
+                        privateKey = privateKey.replace(/\\n/g, '\n'); // Convert escaped newlines
                     }
 
                     serviceAccount = {
                         type: "service_account",
                         project_id: process.env.FIREBASE_PROJECT_ID,
                         private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-                        private_key: privateKey.replace(/\\n/g, '\n'), // Convert escaped newlines
+                        private_key: privateKey,
                         client_email: process.env.FIREBASE_CLIENT_EMAIL,
                         client_id: process.env.FIREBASE_CLIENT_ID,
                         auth_uri: "https://accounts.google.com/o/oauth2/auth",
