@@ -586,10 +586,23 @@ router.post('/push-token', async (req, res, next) => {
         // Manual validation
         const { token, platform, deviceInfo } = req.body;
 
+        console.log('🔍 Token validation debug:', {
+            token: token,
+            tokenType: typeof token,
+            tokenExists: !!token,
+            platform: platform,
+            platformType: typeof platform
+        });
+
         if (!token || typeof token !== 'string') {
             return res.status(400).json({
                 success: false,
-                error: 'Push token is required and must be a string'
+                error: 'Push token is required and must be a string',
+                debug: {
+                    token: token,
+                    tokenType: typeof token,
+                    tokenExists: !!token
+                }
             });
         }
 
