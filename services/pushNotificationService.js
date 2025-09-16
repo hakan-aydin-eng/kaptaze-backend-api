@@ -27,8 +27,21 @@ class PushNotificationService {
             if (!admin.apps.length) {
                 let serviceAccount = null;
 
-                // Try Base64 encoded full service account first (for Render)
-                if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+                // Try firebase.json file first (easiest for deployment)
+                const fs = require('fs');
+                const path = require('path');
+                const firebaseJsonPath = path.join(__dirname, '..', 'firebase.json');
+
+                if (fs.existsSync(firebaseJsonPath)) {
+                    try {
+                        serviceAccount = JSON.parse(fs.readFileSync(firebaseJsonPath, 'utf8'));
+                        console.log('✅ Using firebase.json file for Firebase service account');
+                    } catch (error) {
+                        console.error('❌ Failed to read firebase.json:', error.message);
+                    }
+                }
+                // Try Base64 encoded full service account (for Render)
+                else if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
                     try {
                         const decoded = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf-8');
                         serviceAccount = JSON.parse(decoded);
