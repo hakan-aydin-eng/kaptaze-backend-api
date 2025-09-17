@@ -863,4 +863,155 @@ router.post('/test-push', async (req, res) => {
     }
 });
 
+// @route   GET /auth/favorites
+// @desc    Get consumer's favorite restaurants
+// @access  Private (Consumer)
+router.get('/favorites', authenticate, async (req, res, next) => {
+    try {
+        if (req.user.userType !== 'consumer') {
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied. Consumer only.'
+            });
+        }
+
+        const consumer = await Consumer.findById(req.user.id)
+            .populate('favoriteRestaurants', 'name category address imageUrl rating packages location')
+            .select('favoriteRestaurants');
+
+        if (!consumer) {
+            return res.status(404).json({
+                success: false,
+                error: 'Consumer not found'
+            });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                favorites: consumer.favoriteRestaurants || [],
+                count: consumer.favoriteRestaurants?.length || 0
+            }
+        });
+
+    } catch (error) {
+        console.error('Get favorites error:', error);
+        next(error);
+    }
+});
+
+// @route   POST /auth/favorites/:restaurantId
+// @desc    Add restaurant to favorites
+// @access  Private (Consumer)
+router.post('/favorites/:restaurantId', authenticate, async (req, res, next) => {
+    try {
+        if (req.user.userType !== 'consumer') {
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied. Consumer only.'
+            });
+        }
+
+        const { restaurantId } = req.params;
+        const consumer = await Consumer.findById(req.user.id);
+
+        if (!consumer) {
+            return res.status(404).json({
+                success: false,
+                error: 'Consumer not found'
+            });
+        }
+
+        // Check if restaurant exists
+        const Restaurant = require('../models/Restaurant');
+        const restaurant = await Restaurant.findById(restaurantId);
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Restaurant not found'
+            });
+        }
+
+        // Check if already in favorites
+        if (consumer.favoriteRestaurants.includes(restaurantId)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Restaurant already in favorites'
+            });
+        }
+
+        // Add to favorites
+        consumer.favoriteRestaurants.push(restaurantId);
+        await consumer.save();
+
+        console.log(`❤️ ${consumer.name} added ${restaurant.name} to favorites`);
+
+        res.json({
+            success: true,
+            message: 'Restaurant added to favorites',
+            data: {
+                restaurantId,
+                favoriteCount: consumer.favoriteRestaurants.length
+            }
+        });
+
+    } catch (error) {
+        console.error('Add favorite error:', error);
+        next(error);
+    }
+});
+
+// @route   DELETE /auth/favorites/:restaurantId
+// @desc    Remove restaurant from favorites
+// @access  Private (Consumer)
+router.delete('/favorites/:restaurantId', authenticate, async (req, res, next) => {
+    try {
+        if (req.user.userType !== 'consumer') {
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied. Consumer only.'
+            });
+        }
+
+        const { restaurantId } = req.params;
+        const consumer = await Consumer.findById(req.user.id);
+
+        if (!consumer) {
+            return res.status(404).json({
+                success: false,
+                error: 'Consumer not found'
+            });
+        }
+
+        // Check if in favorites
+        if (!consumer.favoriteRestaurants.includes(restaurantId)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Restaurant not in favorites'
+            });
+        }
+
+        // Remove from favorites
+        consumer.favoriteRestaurants = consumer.favoriteRestaurants.filter(
+            id => id.toString() !== restaurantId
+        );
+        await consumer.save();
+
+        console.log(`💔 ${consumer.name} removed restaurant ${restaurantId} from favorites`);
+
+        res.json({
+            success: true,
+            message: 'Restaurant removed from favorites',
+            data: {
+                restaurantId,
+                favoriteCount: consumer.favoriteRestaurants.length
+            }
+        });
+
+    } catch (error) {
+        console.error('Remove favorite error:', error);
+        next(error);
+    }
+});
+
 module.exports = router;
