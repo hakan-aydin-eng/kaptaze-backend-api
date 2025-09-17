@@ -421,9 +421,9 @@ router.post('/packages', [
                 data: {
                     restaurantId: restaurant._id.toString(),
                     restaurantName: restaurant.name,
-                    packageId: newPackage.id,
+                    packageId: newPackage.id.toString(),
                     packageName: newPackage.name,
-                    packagePrice: newPackage.discountedPrice || newPackage.price
+                    packagePrice: (newPackage.discountedPrice || newPackage.price).toString()
                 }
             };
 

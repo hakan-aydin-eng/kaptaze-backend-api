@@ -135,12 +135,12 @@ class LocationNotificationService {
                 type: 'nearby_deals',
                 priority: 'normal',
                 data: {
-                    restaurantCount: nearbyRestaurants.length,
-                    packageCount: totalActivePackages,
-                    distance: this.PROXIMITY_RADIUS_KM,
+                    restaurantCount: nearbyRestaurants.length.toString(),
+                    packageCount: totalActivePackages.toString(),
+                    distance: this.PROXIMITY_RADIUS_KM.toString(),
                     action: 'view_nearby_deals',
-                    latitude: latitude,
-                    longitude: longitude
+                    latitude: latitude.toString(),
+                    longitude: longitude.toString()
                 }
             };
 
@@ -206,8 +206,8 @@ class LocationNotificationService {
                             type: 'weekly_digest',
                             priority: 'low',
                             data: {
-                                restaurantCount: nearbyRestaurants.length,
-                                distance: this.PROXIMITY_RADIUS_KM,
+                                restaurantCount: nearbyRestaurants.length.toString(),
+                                distance: this.PROXIMITY_RADIUS_KM.toString(),
                                 action: 'view_nearby_restaurants'
                             }
                         };
