@@ -415,8 +415,8 @@ router.post('/packages', [
             const pushService = require('../services/pushNotificationService');
 
             const notification = {
-                title: `${restaurant.name} yeni paket ekledi! 🍴`,
-                body: `${newPackage.name} - ${newPackage.discountedPrice || newPackage.price}₺`,
+                title: `${restaurant.name} beklediğin süpriz paketi ekledi 😱`,
+                body: `${newPackage.name} - Hadi gidelim! 🚀`,
                 type: 'favorite_restaurant_package',
                 data: {
                     restaurantId: restaurant._id.toString(),
