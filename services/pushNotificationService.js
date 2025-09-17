@@ -163,8 +163,30 @@ class PushNotificationService {
         });
 
         try {
+            // Filter out Expo tokens - only send to valid FCM tokens
+            const validTokens = tokens.filter(token => !token.startsWith('ExponentPushToken'));
+            const invalidTokens = tokens.filter(token => token.startsWith('ExponentPushToken'));
+
+            if (invalidTokens.length > 0) {
+                console.log(`⚠️ Skipping ${invalidTokens.length} Expo tokens (not compatible with FCM):`);
+                invalidTokens.forEach(token => {
+                    console.log(`   ${token.substring(0, 30)}...`);
+                });
+            }
+
+            if (validTokens.length === 0) {
+                console.log('⚠️ No valid FCM tokens found after filtering');
+                return {
+                    success: true,
+                    successCount: 0,
+                    failureCount: tokens.length,
+                    tokenCount: tokens.length,
+                    message: 'No valid FCM tokens (all were Expo tokens)'
+                };
+            }
+
             // Use sendEach instead of sendMulticast for multiple tokens
-            const messages = tokens.map(token => ({
+            const messages = validTokens.map(token => ({
                 notification: {
                     title: notification.title,
                     body: notification.body
@@ -181,7 +203,7 @@ class PushNotificationService {
 
             const response = await this.messaging.sendEach(messages);
 
-            console.log(`🔔 Push notification sent successfully: ${response.successCount}/${tokens.length}`);
+            console.log(`🔔 Push notification sent successfully: ${response.successCount}/${validTokens.length} (${tokens.length} total, ${invalidTokens.length} skipped)`);
 
             // Handle failed tokens (invalid/expired)
             if (response.failureCount > 0) {
@@ -189,11 +211,11 @@ class PushNotificationService {
                 response.responses.forEach((resp, idx) => {
                     if (!resp.success) {
                         failedTokens.push({
-                            token: tokens[idx],
+                            token: validTokens[idx], // Use validTokens index since we filtered
                             error: resp.error?.code || 'unknown',
                             errorMessage: resp.error?.message || 'Unknown error'
                         });
-                        console.log(`❌ Failed to send to token ${tokens[idx].substring(0, 20)}...`);
+                        console.log(`❌ Failed to send to token ${validTokens[idx].substring(0, 20)}...`);
                         console.log(`   Error Code: ${resp.error?.code || 'unknown'}`);
                         console.log(`   Error Message: ${resp.error?.message || 'No error message'}`);
                     }
@@ -206,8 +228,10 @@ class PushNotificationService {
             return {
                 success: true,
                 successCount: response.successCount,
-                failureCount: response.failureCount,
-                tokenCount: tokens.length
+                failureCount: response.failureCount + invalidTokens.length, // Include skipped tokens in failure count
+                tokenCount: tokens.length,
+                validTokenCount: validTokens.length,
+                skippedTokenCount: invalidTokens.length
             };
 
         } catch (error) {
