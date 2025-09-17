@@ -1,6 +1,7 @@
 /**
  * KapTaze Backend API Server
  * Professional Restaurant Management System
+ * Updated: 2025-09-17
  */
 
 require('dotenv').config();
