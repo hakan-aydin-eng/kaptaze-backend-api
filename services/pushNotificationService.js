@@ -156,6 +156,12 @@ class PushNotificationService {
             };
         }
 
+        console.log('🔥 Firebase SDK status:', {
+            initialized: this.initialized,
+            messagingExists: !!this.messaging,
+            appsLength: admin.apps.length
+        });
+
         try {
             // Use sendEach instead of sendMulticast for multiple tokens
             const messages = tokens.map(token => ({
@@ -183,9 +189,12 @@ class PushNotificationService {
                     if (!resp.success) {
                         failedTokens.push({
                             token: tokens[idx],
-                            error: resp.error?.code || 'unknown'
+                            error: resp.error?.code || 'unknown',
+                            errorMessage: resp.error?.message || 'Unknown error'
                         });
                         console.log(`❌ Failed to send to token ${tokens[idx].substring(0, 20)}...`);
+                        console.log(`   Error Code: ${resp.error?.code || 'unknown'}`);
+                        console.log(`   Error Message: ${resp.error?.message || 'No error message'}`);
                     }
                 });
 
@@ -225,13 +234,19 @@ class PushNotificationService {
                 query['notifications.news'] = preferences.news;
             }
 
+            console.log('🔍 Query for consumers:', JSON.stringify(query));
+
             const consumers = await Consumer.find(query);
+            console.log(`👥 Found ${consumers.length} consumers matching preferences`);
+
             const allTokens = [];
 
             consumers.forEach(consumer => {
                 const activeTokens = consumer.pushTokens.filter(t => t.active);
+                console.log(`📧 Consumer ${consumer.email}: ${activeTokens.length} active tokens`);
                 activeTokens.forEach(tokenObj => {
                     allTokens.push(tokenObj.token);
+                    console.log(`   Token: ${tokenObj.token.substring(0, 20)}... (${tokenObj.platform})`);
                 });
             });
 
