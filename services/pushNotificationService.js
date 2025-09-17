@@ -167,12 +167,13 @@ class PushNotificationService {
             const messages = tokens.map(token => ({
                 notification: {
                     title: notification.title,
-                    body: notification.body,
-                    icon: notification.icon || 'https://kaptaze.com/images/kaptaze-icon.png'
+                    body: notification.body
+                    // Note: icon field not supported in FCM v1 API
                 },
                 data: {
                     type: notification.type || 'general',
                     timestamp: new Date().toISOString(),
+                    icon: notification.icon || 'https://kaptaze.com/images/kaptaze-icon.png',
                     ...notification.data
                 },
                 token: token
