@@ -388,6 +388,9 @@ class PushNotificationService {
                 });
             });
 
+            // Save in-app notification to each consumer's database
+            await this.saveInAppNotifications(consumers, notification);
+
             const result = await this.sendToTokens(tokens, notification);
             console.log(`⭐ Restaurant favorite notification sent to ${consumers.length} consumers`);
 
@@ -441,6 +444,47 @@ class PushNotificationService {
         };
 
         return await this.sendToConsumer(consumerEmail, testNotification);
+    }
+
+    /**
+     * Save in-app notification to consumers' database records
+     */
+    async saveInAppNotifications(consumers, notification) {
+        try {
+            const notificationId = new Date().getTime().toString() + Math.random().toString(36).substr(2, 9);
+
+            const inAppNotification = {
+                id: notificationId,
+                title: notification.title,
+                message: notification.body,
+                type: notification.type || 'general',
+                data: notification.data || {},
+                read: false,
+                createdAt: new Date()
+            };
+
+            // Add notification to each consumer
+            const bulkOps = consumers.map(consumer => ({
+                updateOne: {
+                    filter: { _id: consumer._id },
+                    update: {
+                        $push: {
+                            inAppNotifications: {
+                                $each: [inAppNotification],
+                                $slice: -100 // Keep only last 100 notifications per user
+                            }
+                        }
+                    }
+                }
+            }));
+
+            await Consumer.bulkWrite(bulkOps);
+            console.log(`💾 In-app notification saved for ${consumers.length} consumers`);
+
+        } catch (error) {
+            console.error('Error saving in-app notifications:', error);
+            // Don't throw error - notification sending should continue even if database save fails
+        }
     }
 }
 

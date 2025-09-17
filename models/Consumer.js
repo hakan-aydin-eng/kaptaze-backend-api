@@ -74,6 +74,32 @@ const consumerSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Restaurant'
     }],
+
+    // In-app notifications history
+    inAppNotifications: [{
+        id: { type: String, required: true },
+        title: { type: String, required: true },
+        message: { type: String, required: true },
+        type: {
+            type: String,
+            enum: ['favorite_restaurant', 'promotion', 'location', 'order', 'general'],
+            default: 'general'
+        },
+        data: {
+            restaurantId: String,
+            restaurantName: String,
+            packageId: String,
+            packageName: String,
+            packagePrice: String,
+            orderId: String,
+            latitude: String,
+            longitude: String,
+            action: String
+        },
+        read: { type: Boolean, default: false },
+        createdAt: { type: Date, default: Date.now },
+        expiresAt: { type: Date, default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) } // 30 days
+    }],
     
     // Security & Verification
     emailVerified: {

@@ -1014,4 +1014,186 @@ router.delete('/favorites/:restaurantId', authenticate, async (req, res, next) =
     }
 });
 
+// ==================== IN-APP NOTIFICATIONS ====================
+
+// @route   GET /auth/notifications
+// @desc    Get consumer's in-app notifications
+// @access  Private (Consumer)
+router.get('/notifications', async (req, res, next) => {
+    try {
+        const consumer = await Consumer.findById(req.user._id);
+        if (!consumer) {
+            return res.status(404).json({
+                success: false,
+                error: 'Consumer not found'
+            });
+        }
+
+        // Sort by newest first and limit to recent notifications
+        const notifications = consumer.inAppNotifications
+            .filter(notif => notif.expiresAt > new Date()) // Only non-expired
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+            .slice(0, 50); // Limit to 50 most recent
+
+        const unreadCount = notifications.filter(notif => !notif.read).length;
+
+        res.json({
+            success: true,
+            data: {
+                notifications,
+                unreadCount,
+                totalCount: notifications.length
+            }
+        });
+
+    } catch (error) {
+        console.error('Get notifications error:', error);
+        next(error);
+    }
+});
+
+// @route   PATCH /auth/notifications/:notificationId/read
+// @desc    Mark specific notification as read
+// @access  Private (Consumer)
+router.patch('/notifications/:notificationId/read', async (req, res, next) => {
+    try {
+        const { notificationId } = req.params;
+
+        const consumer = await Consumer.findById(req.user._id);
+        if (!consumer) {
+            return res.status(404).json({
+                success: false,
+                error: 'Consumer not found'
+            });
+        }
+
+        const notification = consumer.inAppNotifications.id(notificationId);
+        if (!notification) {
+            return res.status(404).json({
+                success: false,
+                error: 'Notification not found'
+            });
+        }
+
+        notification.read = true;
+        await consumer.save();
+
+        res.json({
+            success: true,
+            message: 'Notification marked as read',
+            data: { notificationId }
+        });
+
+    } catch (error) {
+        console.error('Mark notification read error:', error);
+        next(error);
+    }
+});
+
+// @route   PATCH /auth/notifications/mark-all-read
+// @desc    Mark all notifications as read
+// @access  Private (Consumer)
+router.patch('/notifications/mark-all-read', async (req, res, next) => {
+    try {
+        const consumer = await Consumer.findById(req.user._id);
+        if (!consumer) {
+            return res.status(404).json({
+                success: false,
+                error: 'Consumer not found'
+            });
+        }
+
+        // Mark all unread notifications as read
+        consumer.inAppNotifications.forEach(notification => {
+            if (!notification.read) {
+                notification.read = true;
+            }
+        });
+
+        await consumer.save();
+
+        const markedCount = consumer.inAppNotifications.filter(notif => notif.read).length;
+
+        res.json({
+            success: true,
+            message: 'All notifications marked as read',
+            data: { markedCount }
+        });
+
+    } catch (error) {
+        console.error('Mark all notifications read error:', error);
+        next(error);
+    }
+});
+
+// @route   DELETE /auth/notifications/:notificationId
+// @desc    Delete specific notification
+// @access  Private (Consumer)
+router.delete('/notifications/:notificationId', async (req, res, next) => {
+    try {
+        const { notificationId } = req.params;
+
+        const consumer = await Consumer.findById(req.user._id);
+        if (!consumer) {
+            return res.status(404).json({
+                success: false,
+                error: 'Consumer not found'
+            });
+        }
+
+        const notificationIndex = consumer.inAppNotifications.findIndex(
+            notif => notif._id.toString() === notificationId
+        );
+
+        if (notificationIndex === -1) {
+            return res.status(404).json({
+                success: false,
+                error: 'Notification not found'
+            });
+        }
+
+        consumer.inAppNotifications.splice(notificationIndex, 1);
+        await consumer.save();
+
+        res.json({
+            success: true,
+            message: 'Notification deleted',
+            data: { notificationId }
+        });
+
+    } catch (error) {
+        console.error('Delete notification error:', error);
+        next(error);
+    }
+});
+
+// @route   DELETE /auth/notifications/clear-all
+// @desc    Clear all notifications
+// @access  Private (Consumer)
+router.delete('/notifications/clear-all', async (req, res, next) => {
+    try {
+        const consumer = await Consumer.findById(req.user._id);
+        if (!consumer) {
+            return res.status(404).json({
+                success: false,
+                error: 'Consumer not found'
+            });
+        }
+
+        const deletedCount = consumer.inAppNotifications.length;
+        consumer.inAppNotifications = [];
+        await consumer.save();
+
+        res.json({
+            success: true,
+            message: 'All notifications cleared',
+            data: { deletedCount }
+        });
+
+    } catch (error) {
+        console.error('Clear all notifications error:', error);
+        next(error);
+    }
+});
+
 module.exports = router;
