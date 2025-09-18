@@ -167,19 +167,22 @@ app.use(logger);
 const restaurantSockets = new Map();
 
 io.on('connection', (socket) => {
-    console.log('New client connected:', socket.id);
-    
+    console.log('🔌 New client connected:', socket.id);
+
     socket.on('restaurant-connect', (restaurantId) => {
         restaurantSockets.set(restaurantId, socket.id);
         socket.join(`restaurant-${restaurantId}`);
-        console.log(`Restaurant ${restaurantId} connected`);
+        console.log(`🏪 Restaurant ${restaurantId} connected with socket ${socket.id}`);
+        console.log(`📊 Total restaurant connections: ${restaurantSockets.size}`);
     });
-    
+
     socket.on('disconnect', () => {
+        console.log(`❌ Client disconnected: ${socket.id}`);
         for (const [restaurantId, socketId] of restaurantSockets.entries()) {
             if (socketId === socket.id) {
                 restaurantSockets.delete(restaurantId);
-                console.log(`Restaurant ${restaurantId} disconnected`);
+                console.log(`🏪 Restaurant ${restaurantId} disconnected`);
+                console.log(`📊 Total restaurant connections: ${restaurantSockets.size}`);
                 break;
             }
         }

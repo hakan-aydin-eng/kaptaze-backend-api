@@ -288,10 +288,15 @@ router.post('/create', async (req, res) => {
 
         // Send real-time notification via Socket.IO
         const io = req.app.get('io');
+        console.log(`🔔 Sending Socket.IO notification to restaurant-${restaurantId}`);
+        console.log(`📊 Order ID: ${order._id}, Status: ${order.status}`);
+
         io.to(`restaurant-${restaurantId}`).emit('new-order', {
             order: order,
             timestamp: new Date()
         });
+
+        console.log(`✅ Socket.IO notification sent to restaurant-${restaurantId}`);
 
         // Send email notification if email exists
         if (restaurant.email) {
