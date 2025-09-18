@@ -15,6 +15,7 @@ const Package = require('../models/Package');
 const NotificationLog = require('../models/NotificationLog');
 // SendGrid email service - now active with proper configuration
 const { sendOrderNotification } = require('../services/emailService');
+const { runBulkMigration } = require('../scripts/bulkMigration');
 
 const router = express.Router();
 
@@ -2185,6 +2186,35 @@ router.get('/notification-history', async (req, res, next) => {
 
     } catch (error) {
         console.error('❌ Notification history error:', error);
+        next(error);
+    }
+});
+
+// @route   POST /admin/migrate-users
+// @desc    Run bulk migration for all users
+// @access  Private (Admin)
+router.post('/migrate-users', async (req, res, next) => {
+    try {
+        console.log('🔄 Admin requested bulk user migration...');
+
+        const result = await runBulkMigration();
+
+        if (result.success) {
+            res.json({
+                success: true,
+                message: `Migration completed successfully. Updated ${result.migratedCount} users.`,
+                data: {
+                    migratedCount: result.migratedCount
+                }
+            });
+        } else {
+            res.status(500).json({
+                success: false,
+                error: `Migration failed: ${result.error}`
+            });
+        }
+    } catch (error) {
+        console.error('❌ Migration endpoint error:', error);
         next(error);
     }
 });

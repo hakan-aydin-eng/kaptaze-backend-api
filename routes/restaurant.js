@@ -13,6 +13,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const cloudinary = require('../config/cloudinary');
+const pushNotificationService = require('../services/pushNotificationService');
 
 const router = express.Router();
 const jwt = require('jsonwebtoken');
@@ -490,8 +491,34 @@ router.patch('/packages/:packageId', async (req, res, next) => {
             restaurant.packages[packageIndex].quantity = 1;
         }
 
+        // Check if package was reactivated (inactive → active)
+        const wasInactive = restaurant.packages[packageIndex].status === 'inactive';
+        const isNowActive = req.body.status === 'active';
+
         restaurant.packages[packageIndex].updatedAt = new Date();
         await restaurant.save();
+
+        // Send notification to favorites if package was reactivated
+        if (wasInactive && isNowActive) {
+            console.log(`📢 Package reactivated: ${restaurant.packages[packageIndex].name} - Sending notification to favorites`);
+
+            try {
+                await pushNotificationService.sendToRestaurantFavorites(restaurant._id, {
+                    title: `${restaurant.name}`,
+                    body: `Beklediğin paket tekrar yayında! 🎉 Hemen kontrol et!`,
+                    data: {
+                        type: 'package_reactivated',
+                        restaurantId: restaurant._id.toString(),
+                        packageId: restaurant.packages[packageIndex].id,
+                        restaurantName: restaurant.name,
+                        packageName: restaurant.packages[packageIndex].name
+                    }
+                });
+            } catch (notificationError) {
+                console.error('❌ Failed to send reactivation notification:', notificationError);
+                // Don't fail the request if notification fails
+            }
+        }
 
         res.json({
             success: true,

@@ -5,6 +5,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Consumer = require('../models/Consumer');
+const autoMigrationMiddleware = require('./autoMigration');
 
 // Verify JWT Token
 const authenticate = async (req, res, next) => {
@@ -81,7 +82,10 @@ const authenticate = async (req, res, next) => {
             }
 
             req.user = user;
-            next();
+
+            // Apply auto-migration for authenticated users
+            await autoMigrationMiddleware(req, res, next);
+            return; // autoMigrationMiddleware will call next()
         } catch (tokenError) {
             return res.status(401).json({
                 success: false,
