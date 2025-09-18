@@ -368,9 +368,17 @@ class PushNotificationService {
      */
     async sendToRestaurantFavorites(restaurantId, notification) {
         try {
+            console.log(`🔍 Searching for consumers who favorited restaurant: ${restaurantId}`);
+
             const consumers = await Consumer.find({
                 status: 'active',
                 favoriteRestaurants: restaurantId
+            });
+
+            console.log(`📊 Found ${consumers.length} consumers who favorited this restaurant:`);
+            consumers.forEach((consumer, index) => {
+                console.log(`  ${index + 1}. ${consumer.name} (${consumer.email}) - status: ${consumer.status}`);
+                console.log(`     favorites: [${consumer.favoriteRestaurants.join(', ')}]`);
             });
 
             if (consumers.length === 0) {
