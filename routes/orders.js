@@ -394,10 +394,15 @@ router.put('/:orderId/status', async (req, res) => {
 
         // Notify customer via Socket.IO
         const io = req.app.get('io');
+        console.log(`📱 Sending order status update to mobile app - order-update-${orderId}`);
+        console.log(`📊 Status: ${order.status}, EstimatedDeliveryTime: ${order.estimatedDeliveryTime}`);
+
         io.emit(`order-update-${orderId}`, {
             status: order.status,
             estimatedDeliveryTime: order.estimatedDeliveryTime
         });
+
+        console.log(`✅ Order status update sent to mobile app - order-update-${orderId}`);
 
         res.json({
             success: true,
