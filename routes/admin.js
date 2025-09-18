@@ -12,6 +12,7 @@ const Restaurant = require('../models/Restaurant');
 const User = require('../models/User');
 const Consumer = require('../models/Consumer');
 const Package = require('../models/Package');
+const NotificationLog = require('../models/NotificationLog');
 // SendGrid email service - now active with proper configuration
 const { sendOrderNotification } = require('../services/emailService');
 
@@ -1863,7 +1864,38 @@ router.post('/notifications/send', [
                 });
         }
 
-        // Log notification in database (optional - you can create a Notification model)
+        // Log notification in database
+        try {
+            const logData = {
+                title,
+                message,
+                type: type === 'genel' ? 'general' :
+                      type === 'promosyon' ? 'promotion' :
+                      type === 'şehir' ? 'city' :
+                      type === 'restoran' ? 'restaurant' : type,
+                priority,
+                targetType: type === 'genel' || type === 'promosyon' ? 'all' :
+                           type === 'şehir' ? 'location' :
+                           type === 'restoran' ? 'restaurant' : 'test',
+                targetDetails: {
+                    ...targetData,
+                    restaurantName: targetData.restaurantName
+                },
+                totalTokens: result.tokenCount || 0,
+                validTokens: result.validTokenCount || result.tokenCount || 0,
+                skippedTokens: result.skippedTokenCount || 0,
+                successCount: result.successCount || 0,
+                failureCount: result.failureCount || 0,
+                consumerCount: result.consumerCount || 0,
+                sentBy: 'Admin Panel',
+                ipAddress: req.ip
+            };
+
+            await pushService.logNotification(logData);
+        } catch (logError) {
+            console.error('❌ Failed to log notification:', logError);
+        }
+
         console.log(`✅ ${type} notification sent:`, result);
 
         res.json({
@@ -2014,6 +2046,145 @@ router.get('/notifications/stats', async (req, res, next) => {
 
     } catch (error) {
         console.error('❌ Notification stats error:', error);
+        next(error);
+    }
+});
+
+// @route   GET /admin/notification-stats
+// @desc    Get notification dashboard statistics
+// @access  Private (Admin)
+router.get('/notification-stats', authenticate, authorize(['admin']), async (req, res, next) => {
+    try {
+        console.log('📊 Getting notification statistics...');
+
+        const { startDate, endDate } = req.query;
+
+        // Get comprehensive stats
+        const stats = await NotificationLog.getStats(startDate, endDate);
+
+        // Get recent notifications count by type
+        const typeStats = await NotificationLog.aggregate([
+            {
+                $match: startDate && endDate ? {
+                    createdAt: {
+                        $gte: new Date(startDate),
+                        $lte: new Date(endDate)
+                    }
+                } : {}
+            },
+            {
+                $group: {
+                    _id: '$type',
+                    count: { $sum: 1 },
+                    totalReached: { $sum: '$stats.successCount' },
+                    avgDeliveryRate: { $avg: '$deliveryRate' }
+                }
+            }
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                overview: {
+                    totalNotifications: stats.totalNotifications,
+                    totalReached: stats.totalReached,
+                    totalFavoriteNotifications: stats.totalFavoriteNotifications,
+                    totalProximityNotifications: stats.totalProximityNotifications,
+                    averageDeliveryRate: Math.round(stats.averageDeliveryRate || 0),
+                    totalConsumersReached: stats.totalConsumersReached
+                },
+                byType: typeStats,
+                period: { startDate, endDate }
+            }
+        });
+
+        console.log('✅ Notification stats retrieved successfully');
+
+    } catch (error) {
+        console.error('❌ Notification stats error:', error);
+        next(error);
+    }
+});
+
+// @route   GET /admin/notification-history
+// @desc    Get notification history with pagination
+// @access  Private (Admin)
+router.get('/notification-history', authenticate, authorize(['admin']), async (req, res, next) => {
+    try {
+        console.log('📋 Getting notification history...');
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const { type, status, startDate, endDate } = req.query;
+
+        // Build filter query
+        const filter = {};
+        if (type && type !== 'all') filter.type = type;
+        if (status && status !== 'all') filter.status = status;
+        if (startDate && endDate) {
+            filter.createdAt = {
+                $gte: new Date(startDate),
+                $lte: new Date(endDate)
+            };
+        }
+
+        // Get notifications with pagination
+        const [notifications, totalCount] = await Promise.all([
+            NotificationLog.find(filter)
+                .populate('targetDetails.restaurantId', 'name')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            NotificationLog.countDocuments(filter)
+        ]);
+
+        // Format notifications for frontend
+        const formattedNotifications = notifications.map(notif => ({
+            id: notif._id,
+            title: notif.title,
+            message: notif.message,
+            type: notif.type,
+            priority: notif.priority,
+            targetType: notif.targetType,
+            targetName: notif.targetDetails?.restaurantName ||
+                       notif.targetDetails?.city ||
+                       'All Users',
+            stats: {
+                delivered: notif.stats.successCount,
+                failed: notif.stats.failureCount,
+                total: notif.stats.totalTokens,
+                deliveryRate: notif.deliveryRate
+            },
+            status: notif.status,
+            sentAt: notif.sentAt,
+            createdAt: notif.createdAt,
+            duration: notif.duration
+        }));
+
+        const totalPages = Math.ceil(totalCount / limit);
+
+        res.json({
+            success: true,
+            data: {
+                notifications: formattedNotifications,
+                pagination: {
+                    currentPage: page,
+                    totalPages,
+                    totalCount,
+                    hasNext: page < totalPages,
+                    hasPrev: page > 1
+                },
+                filters: { type, status, startDate, endDate }
+            }
+        });
+
+        console.log(`✅ Retrieved ${formattedNotifications.length} notifications (page ${page}/${totalPages})`);
+
+    } catch (error) {
+        console.error('❌ Notification history error:', error);
         next(error);
     }
 });

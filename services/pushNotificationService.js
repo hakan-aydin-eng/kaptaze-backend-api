@@ -4,6 +4,7 @@
 
 const admin = require('firebase-admin');
 const Consumer = require('../models/Consumer');
+const NotificationLog = require('../models/NotificationLog');
 
 class PushNotificationService {
     constructor() {
@@ -484,6 +485,45 @@ class PushNotificationService {
         } catch (error) {
             console.error('Error saving in-app notifications:', error);
             // Don't throw error - notification sending should continue even if database save fails
+        }
+    }
+
+    /**
+     * Log notification sending attempt
+     */
+    async logNotification(logData) {
+        try {
+            const notificationLog = new NotificationLog({
+                title: logData.title,
+                message: logData.message,
+                type: logData.type || 'general',
+                priority: logData.priority || 'normal',
+                targetType: logData.targetType,
+                targetDetails: logData.targetDetails || {},
+                stats: {
+                    totalTokens: logData.totalTokens || 0,
+                    validTokens: logData.validTokens || 0,
+                    skippedTokens: logData.skippedTokens || 0,
+                    successCount: logData.successCount || 0,
+                    failureCount: logData.failureCount || 0,
+                    consumerCount: logData.consumerCount || 0
+                },
+                status: logData.status || 'completed',
+                sentAt: logData.sentAt || new Date(),
+                completedAt: logData.completedAt || new Date(),
+                sentBy: logData.sentBy || 'Admin Panel',
+                ipAddress: logData.ipAddress,
+                data: logData.data || {},
+                error: logData.error
+            });
+
+            await notificationLog.save();
+            console.log(`📊 Notification logged: ${logData.title} - ${logData.successCount}/${logData.totalTokens} delivered`);
+
+            return notificationLog;
+        } catch (error) {
+            console.error('Error logging notification:', error);
+            // Don't throw error - logging failure shouldn't stop notification sending
         }
     }
 }

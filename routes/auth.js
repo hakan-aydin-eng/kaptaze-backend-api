@@ -1021,7 +1021,7 @@ router.delete('/favorites/:restaurantId', authenticate, async (req, res, next) =
 // @access  Private (Consumer)
 router.get('/notifications', async (req, res, next) => {
     try {
-        const consumer = await Consumer.findById(req.user._id);
+        const consumer = await Consumer.findById(req.user.id);
         if (!consumer) {
             return res.status(404).json({
                 success: false,
@@ -1059,7 +1059,7 @@ router.patch('/notifications/:notificationId/read', async (req, res, next) => {
     try {
         const { notificationId } = req.params;
 
-        const consumer = await Consumer.findById(req.user._id);
+        const consumer = await Consumer.findById(req.user.id);
         if (!consumer) {
             return res.status(404).json({
                 success: false,
@@ -1095,7 +1095,7 @@ router.patch('/notifications/:notificationId/read', async (req, res, next) => {
 // @access  Private (Consumer)
 router.patch('/notifications/mark-all-read', async (req, res, next) => {
     try {
-        const consumer = await Consumer.findById(req.user._id);
+        const consumer = await Consumer.findById(req.user.id);
         if (!consumer) {
             return res.status(404).json({
                 success: false,
@@ -1133,7 +1133,7 @@ router.delete('/notifications/:notificationId', async (req, res, next) => {
     try {
         const { notificationId } = req.params;
 
-        const consumer = await Consumer.findById(req.user._id);
+        const consumer = await Consumer.findById(req.user.id);
         if (!consumer) {
             return res.status(404).json({
                 success: false,
@@ -1172,7 +1172,7 @@ router.delete('/notifications/:notificationId', async (req, res, next) => {
 // @access  Private (Consumer)
 router.delete('/notifications/clear-all', async (req, res, next) => {
     try {
-        const consumer = await Consumer.findById(req.user._id);
+        const consumer = await Consumer.findById(req.user.id);
         if (!consumer) {
             return res.status(404).json({
                 success: false,
