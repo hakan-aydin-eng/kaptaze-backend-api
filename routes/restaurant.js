@@ -477,6 +477,10 @@ router.patch('/packages/:packageId', async (req, res, next) => {
             });
         }
 
+        // Check if package was reactivated (inactive → active) BEFORE updating
+        const wasInactive = restaurant.packages[packageIndex].status === 'inactive';
+        const isNowActive = req.body.status === 'active';
+
         // Update package fields
         const allowedUpdates = ['name', 'description', 'price', 'category', 'status', 'quantity'];
         allowedUpdates.forEach(field => {
@@ -490,10 +494,6 @@ router.patch('/packages/:packageId', async (req, res, next) => {
             // For inactive packages, set quantity to 1 to satisfy validation
             restaurant.packages[packageIndex].quantity = 1;
         }
-
-        // Check if package was reactivated (inactive → active)
-        const wasInactive = restaurant.packages[packageIndex].status === 'inactive';
-        const isNowActive = req.body.status === 'active';
 
         restaurant.packages[packageIndex].updatedAt = new Date();
         await restaurant.save();
