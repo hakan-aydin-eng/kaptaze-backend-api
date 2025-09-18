@@ -2053,7 +2053,7 @@ router.get('/notifications/stats', async (req, res, next) => {
 // @route   GET /admin/notification-stats
 // @desc    Get notification dashboard statistics
 // @access  Private (Admin)
-router.get('/notification-stats', authenticate, authorize(['admin']), async (req, res, next) => {
+router.get('/notification-stats', async (req, res, next) => {
     try {
         console.log('📊 Getting notification statistics...');
 
@@ -2109,7 +2109,7 @@ router.get('/notification-stats', authenticate, authorize(['admin']), async (req
 // @route   GET /admin/notification-history
 // @desc    Get notification history with pagination
 // @access  Private (Admin)
-router.get('/notification-history', authenticate, authorize(['admin']), async (req, res, next) => {
+router.get('/notification-history', async (req, res, next) => {
     try {
         console.log('📋 Getting notification history...');
 
