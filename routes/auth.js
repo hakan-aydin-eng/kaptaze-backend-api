@@ -1019,7 +1019,7 @@ router.delete('/favorites/:restaurantId', authenticate, async (req, res, next) =
 // @route   GET /auth/notifications
 // @desc    Get consumer's in-app notifications
 // @access  Private (Consumer)
-router.get('/notifications', async (req, res, next) => {
+router.get('/notifications', authenticate, async (req, res, next) => {
     try {
         const consumer = await Consumer.findById(req.user.id);
         if (!consumer) {
@@ -1055,7 +1055,7 @@ router.get('/notifications', async (req, res, next) => {
 // @route   PATCH /auth/notifications/:notificationId/read
 // @desc    Mark specific notification as read
 // @access  Private (Consumer)
-router.patch('/notifications/:notificationId/read', async (req, res, next) => {
+router.patch('/notifications/:notificationId/read', authenticate, async (req, res, next) => {
     try {
         const { notificationId } = req.params;
 
@@ -1093,7 +1093,7 @@ router.patch('/notifications/:notificationId/read', async (req, res, next) => {
 // @route   PATCH /auth/notifications/mark-all-read
 // @desc    Mark all notifications as read
 // @access  Private (Consumer)
-router.patch('/notifications/mark-all-read', async (req, res, next) => {
+router.patch('/notifications/mark-all-read', authenticate, async (req, res, next) => {
     try {
         const consumer = await Consumer.findById(req.user.id);
         if (!consumer) {
@@ -1129,7 +1129,7 @@ router.patch('/notifications/mark-all-read', async (req, res, next) => {
 // @route   DELETE /auth/notifications/:notificationId
 // @desc    Delete specific notification
 // @access  Private (Consumer)
-router.delete('/notifications/:notificationId', async (req, res, next) => {
+router.delete('/notifications/:notificationId', authenticate, async (req, res, next) => {
     try {
         const { notificationId } = req.params;
 
@@ -1170,7 +1170,7 @@ router.delete('/notifications/:notificationId', async (req, res, next) => {
 // @route   DELETE /auth/notifications/clear-all
 // @desc    Clear all notifications
 // @access  Private (Consumer)
-router.delete('/notifications/clear-all', async (req, res, next) => {
+router.delete('/notifications/clear-all', authenticate, async (req, res, next) => {
     try {
         const consumer = await Consumer.findById(req.user.id);
         if (!consumer) {
