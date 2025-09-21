@@ -8,10 +8,33 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const Consumer = require('../models/Consumer');
+const Rating = require('../models/Rating');
+const Order = require('../models/Order');
 const { authenticate } = require('../middleware/auth');
 const { sendWelcomeEmail } = require('../services/emailService');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const cloudinary = require('cloudinary').v2;
 
 const router = express.Router();
+
+// Multer configuration for temporary file handling (before Cloudinary upload)
+const upload = multer({
+    dest: 'temp/', // Temporary directory
+    limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB limit
+        files: 1 // Maximum 1 file
+    },
+    fileFilter: function (req, file, cb) {
+        // Check file type
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only image files are allowed'), false);
+        }
+    }
+});
 
 // Debug middleware for all auth routes
 router.use((req, res, next) => {
@@ -1192,6 +1215,252 @@ router.delete('/notifications/clear-all', authenticate, async (req, res, next) =
 
     } catch (error) {
         console.error('Clear all notifications error:', error);
+        next(error);
+    }
+});
+
+// ==================== ORDER RATINGS ====================
+
+// @route   POST /auth/orders/rating
+// @desc    Submit order rating with optional photos
+// @access  Private (Consumer)
+router.post('/orders/rating', authenticate, upload.array('photos', 1), async (req, res, next) => {
+    try {
+        const { orderId, rating, comment } = req.body;
+
+        console.log('📊 Rating submission request:', {
+            orderId,
+            rating,
+            comment: comment ? `${comment.substring(0, 50)}...` : 'No comment',
+            photoCount: req.files ? req.files.length : 0,
+            userId: req.user.id
+        });
+
+        // Validation
+        if (!orderId || !rating) {
+            return res.status(400).json({
+                success: false,
+                error: 'Order ID and rating are required'
+            });
+        }
+
+        if (rating < 1 || rating > 5 || !Number.isInteger(Number(rating))) {
+            return res.status(400).json({
+                success: false,
+                error: 'Rating must be a whole number between 1 and 5'
+            });
+        }
+
+        // Find the order
+        const order = await Order.findById(orderId)
+            .populate('restaurant.id', 'name _id');
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                error: 'Order not found'
+            });
+        }
+
+        // Verify order belongs to the user
+        if (order.customer.id !== req.user.id) {
+            return res.status(403).json({
+                success: false,
+                error: 'You can only rate your own orders'
+            });
+        }
+
+        // Check if order is completed
+        if (order.status !== 'completed' && order.status !== 'delivered') {
+            return res.status(400).json({
+                success: false,
+                error: 'You can only rate completed orders'
+            });
+        }
+
+        // Check if order has already been rated
+        const existingRating = await Rating.findOne({ orderId });
+        if (existingRating) {
+            return res.status(400).json({
+                success: false,
+                error: 'This order has already been rated'
+            });
+        }
+
+        // Process uploaded photos with Cloudinary
+        const photos = [];
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                try {
+                    // Upload to Cloudinary
+                    const uploadResult = await cloudinary.uploader.upload(file.path, {
+                        folder: 'kaptaze/ratings',
+                        resource_type: 'image',
+                        transformation: [
+                            { width: 800, height: 600, crop: 'limit' },
+                            { quality: 'auto', format: 'auto' }
+                        ]
+                    });
+
+                    photos.push({
+                        url: uploadResult.secure_url,
+                        publicId: uploadResult.public_id,
+                        originalName: file.originalname,
+                        size: file.size,
+                        mimeType: file.mimetype
+                    });
+
+                    // Clean up temporary file
+                    fs.unlinkSync(file.path);
+
+                    console.log(`📷 Uploaded photo to Cloudinary: ${uploadResult.public_id}`);
+                } catch (uploadError) {
+                    console.error('❌ Cloudinary upload error:', uploadError);
+                    // Clean up temporary file
+                    fs.unlinkSync(file.path);
+                    throw new Error('Photo upload failed');
+                }
+            }
+            console.log(`📷 Processed ${photos.length} photos for rating`);
+        }
+
+        // Get package info from order items
+        let packageInfo = {};
+        if (order.items && order.items.length > 0) {
+            const firstItem = order.items[0];
+            packageInfo = {
+                packageId: firstItem.productId,
+                packageName: firstItem.name,
+                packagePrice: firstItem.price
+            };
+        }
+
+        // Create rating
+        const newRating = new Rating({
+            orderId: order._id,
+            consumerId: req.user.id,
+            restaurantId: order.restaurant.id._id,
+            rating: Number(rating),
+            comment: comment ? comment.trim() : '',
+            photos: photos,
+            packageInfo: packageInfo
+        });
+
+        await newRating.save();
+
+        console.log(`✅ Rating saved successfully: ${rating}/5 for order ${orderId}`);
+
+        res.status(201).json({
+            success: true,
+            message: 'Rating submitted successfully',
+            data: {
+                ratingId: newRating._id,
+                orderId: order._id,
+                rating: newRating.rating,
+                comment: newRating.comment,
+                photoCount: photos.length,
+                restaurantName: order.restaurant.name || 'Unknown'
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Rating submission error:', error);
+
+        // Clean up temporary files on error
+        if (req.files && req.files.length > 0) {
+            req.files.forEach(file => {
+                try {
+                    if (fs.existsSync(file.path)) {
+                        fs.unlinkSync(file.path);
+                    }
+                } catch (unlinkError) {
+                    console.error('Temp file cleanup error:', unlinkError);
+                }
+            });
+        }
+
+        next(error);
+    }
+});
+
+// @route   GET /auth/orders/:orderId/rating
+// @desc    Get rating for a specific order
+// @access  Private (Consumer)
+router.get('/orders/:orderId/rating', authenticate, async (req, res, next) => {
+    try {
+        const { orderId } = req.params;
+
+        const rating = await Rating.findOne({ orderId })
+            .populate('restaurantId', 'name')
+            .populate('orderId', 'customer items totalAmount');
+
+        if (!rating) {
+            return res.status(404).json({
+                success: false,
+                error: 'Rating not found for this order'
+            });
+        }
+
+        // Verify rating belongs to the user
+        if (rating.consumerId.toString() !== req.user.id) {
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied'
+            });
+        }
+
+        res.json({
+            success: true,
+            data: { rating }
+        });
+
+    } catch (error) {
+        console.error('Get rating error:', error);
+        next(error);
+    }
+});
+
+// @route   GET /auth/surprise-stories
+// @desc    Get public rating photos for main page stories
+// @access  Public
+router.get('/surprise-stories', async (req, res, next) => {
+    try {
+        const limit = parseInt(req.query.limit) || 20;
+
+        // Get recent ratings with photos
+        const stories = await Rating.find({
+            'photos.0': { $exists: true }, // Has at least one photo
+            isPublic: true
+        })
+        .populate('restaurantId', 'name')
+        .populate('consumerId', 'name')
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
+
+        // Format for frontend
+        const formattedStories = stories.map(story => ({
+            id: story._id,
+            photoUrl: story.photos[0]?.url || '',
+            restaurantName: story.restaurantId?.name || 'Restaurant',
+            rating: story.rating,
+            userName: story.consumerId?.name?.split(' ')[0] || 'Kullanıcı', // First name only
+            createdAt: story.createdAt,
+            packageName: story.packageInfo?.packageName || 'Sürpriz Paket'
+        }));
+
+        console.log(`📱 Fetched ${formattedStories.length} surprise stories`);
+
+        res.json({
+            success: true,
+            data: {
+                stories: formattedStories,
+                total: formattedStories.length
+            }
+        });
+
+    } catch (error) {
+        console.error('Get surprise stories error:', error);
         next(error);
     }
 });
