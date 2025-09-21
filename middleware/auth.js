@@ -81,7 +81,12 @@ const authenticate = async (req, res, next) => {
                 });
             }
 
-            req.user = user;
+            // Ensure both _id and id are available for compatibility
+            req.user = {
+                ...user.toObject(),
+                id: user._id.toString(),
+                _id: user._id
+            };
 
             // Apply auto-migration for authenticated users
             await autoMigrationMiddleware(req, res, next);

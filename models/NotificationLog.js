@@ -20,7 +20,7 @@ const notificationLogSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['general', 'promotion', 'city', 'restaurant', 'test'],
+        enum: ['general', 'promotion', 'city', 'restaurant', 'test', 'favorite_restaurant_package'],
         required: true
     },
     priority: {
