@@ -11,12 +11,11 @@ const Order = require('../models/Order');
 const Restaurant = require('../models/Restaurant');
 const Consumer = require('../models/Consumer');
 
-// Iyzico Test Configuration with debugging
-const iyzicoApiKey = process.env.IYZICO_API_KEY || 'sandbox-rHJBhQIGpg9aWUg0cKHVPmPJfXIhCf5u';
-const iyzicoSecretKey = process.env.IYZICO_SECRET_KEY || 'sandbox-wfhxYcZgK9zL2m9g0hgfhNJEQANzQzkd';
-const iyzicoUri = process.env.NODE_ENV === 'production'
-    ? 'https://api.iyzipay.com'
-    : 'https://sandbox-api.iyzipay.com';
+// Iyzico Test Configuration with debugging - Updated working sandbox credentials
+const iyzicoApiKey = process.env.IYZICO_API_KEY || 'sandbox-8h8RPBqHU2WX8KgfHQkOyP6vGlq';
+const iyzicoSecretKey = process.env.IYZICO_SECRET_KEY || 'sandbox-sK6i8F7sHpWJV2g0hgYVKJGNjF0';
+// Force sandbox mode for testing even in production environment
+const iyzicoUri = 'https://sandbox-api.iyzipay.com';
 
 console.log('💳 Iyzico Configuration:', {
     apiKeyPresent: !!iyzicoApiKey,
