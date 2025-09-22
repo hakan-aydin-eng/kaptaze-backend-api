@@ -11,13 +11,25 @@ const Order = require('../models/Order');
 const Restaurant = require('../models/Restaurant');
 const Consumer = require('../models/Consumer');
 
-// Iyzico Test Configuration
+// Iyzico Test Configuration with debugging
+const iyzicoApiKey = process.env.IYZICO_API_KEY || 'sandbox-rHJBhQIGpg9aWUg0cKHVPmPJfXIhCf5u';
+const iyzicoSecretKey = process.env.IYZICO_SECRET_KEY || 'sandbox-wfhxYcZgK9zL2m9g0hgfhNJEQANzQzkd';
+const iyzicoUri = process.env.NODE_ENV === 'production'
+    ? 'https://api.iyzipay.com'
+    : 'https://sandbox-api.iyzipay.com';
+
+console.log('💳 Iyzico Configuration:', {
+    apiKeyPresent: !!iyzicoApiKey,
+    secretKeyPresent: !!iyzicoSecretKey,
+    uri: iyzicoUri,
+    environment: process.env.NODE_ENV,
+    apiKeyPrefix: iyzicoApiKey?.substring(0, 10) + '...'
+});
+
 const iyzipay = new Iyzipay({
-    apiKey: process.env.IYZICO_API_KEY || 'sandbox-rHJBhQIGpg9aWUg0cKHVPmPJfXIhCf5u',
-    secretKey: process.env.IYZICO_SECRET_KEY || 'sandbox-wfhxYcZgK9zL2m9g0hgfhNJEQANzQzkd',
-    uri: process.env.NODE_ENV === 'production'
-        ? 'https://api.iyzipay.com'
-        : 'https://sandbox-api.iyzipay.com'
+    apiKey: iyzicoApiKey,
+    secretKey: iyzicoSecretKey,
+    uri: iyzicoUri
 });
 
 // @route   POST /payment/create
@@ -133,12 +145,20 @@ router.post('/create', authenticate, async (req, res, next) => {
         };
 
         console.log('💳 Sending payment request to Iyzico...');
+        console.log('💳 Payment request details:', JSON.stringify({
+            ...paymentRequest,
+            paymentCard: { ...paymentRequest.paymentCard, cardNumber: '****', cvc: '***' } // Hide sensitive data
+        }, null, 2));
 
         // Initialize 3D Secure payment with Iyzico
         iyzipay.threedsInitialize.create(paymentRequest, async (err, result) => {
             try {
                 if (err) {
-                    console.error('💳 Iyzico error:', err);
+                    console.error('💳 Iyzico error details:', {
+                        message: err.message,
+                        stack: err.stack,
+                        errorData: err
+                    });
 
                     // Update order status to failed
                     order.status = 'payment_failed';
@@ -147,7 +167,8 @@ router.post('/create', authenticate, async (req, res, next) => {
 
                     return res.status(400).json({
                         success: false,
-                        error: 'Payment processing error: ' + err.message
+                        error: err.message || 'Payment processing error',
+                        errorCode: err.errorCode || 'UNKNOWN'
                     });
                 }
 
