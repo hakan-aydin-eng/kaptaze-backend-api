@@ -266,6 +266,23 @@ router.post('/create', authenticate, async (req, res, next) => {
     }
 });
 
+// @route   GET /payment/debug-env
+// @desc    Debug environment variables
+// @access  Public (for testing)
+router.get('/debug-env', (req, res) => {
+    res.json({
+        success: true,
+        environment: {
+            nodeEnv: process.env.NODE_ENV,
+            iyzicoApiKeyPresent: !!process.env.IYZICO_API_KEY,
+            iyzicoSecretKeyPresent: !!process.env.IYZICO_SECRET_KEY,
+            iyzicoApiKeyPrefix: process.env.IYZICO_API_KEY?.substring(0, 15) + '...',
+            iyzicoSecretKeyPrefix: process.env.IYZICO_SECRET_KEY?.substring(0, 15) + '...',
+            allEnvKeys: Object.keys(process.env).filter(key => key.includes('IYZICO'))
+        }
+    });
+});
+
 // @route   GET /payment/test-connection
 // @desc    Test Iyzico connection
 // @access  Public (for testing)
