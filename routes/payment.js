@@ -73,6 +73,9 @@ router.post('/create', authenticate, async (req, res, next) => {
             paidPrice: amount.toString(),
             currency: 'TRY',
             basketId: order._id.toString(),
+            callbackUrl: process.env.NODE_ENV === 'production'
+                ? 'https://kaptaze-backend-api.onrender.com/payment/3ds-callback'
+                : 'http://localhost:3001/payment/3ds-callback',
             paymentCard: {
                 cardHolderName: cardInfo.cardHolderName,
                 cardNumber: cardInfo.cardNumber,
@@ -120,8 +123,8 @@ router.post('/create', authenticate, async (req, res, next) => {
 
         console.log('💳 Sending payment request to Iyzico...');
 
-        // Create payment with Iyzico
-        iyzipay.payment.create(paymentRequest, async (err, result) => {
+        // Initialize 3D Secure payment with Iyzico
+        iyzipay.threedsInitialize.create(paymentRequest, async (err, result) => {
             try {
                 if (err) {
                     console.error('💳 Iyzico error:', err);
@@ -140,14 +143,14 @@ router.post('/create', authenticate, async (req, res, next) => {
                 console.log('💳 Iyzico response:', JSON.stringify(result, null, 2));
 
                 if (result.status === 'success') {
-                    // Payment successful
-                    console.log('✅ Payment successful:', result.paymentId);
+                    // 3D Secure initialized successfully
+                    console.log('✅ 3D Secure initialized:', result.threeDSHtmlContent);
 
-                    // Update order status
-                    order.status = 'confirmed';
-                    order.paymentStatus = 'completed';
-                    order.paymentId = result.paymentId;
+                    // Update order status to waiting for 3D Secure
+                    order.status = 'waiting_3d_secure';
+                    order.paymentStatus = 'waiting_3d_secure';
                     order.iyzicoToken = result.token;
+                    order.threeDSHtmlContent = result.threeDSHtmlContent;
                     await order.save();
 
                     // Save card token if requested
@@ -185,13 +188,14 @@ router.post('/create', authenticate, async (req, res, next) => {
 
                     console.log('✅ Order confirmed and stock updated');
 
-                    // Send success response
+                    // Send 3D Secure response
                     res.json({
                         success: true,
-                        message: 'Payment successful',
+                        message: '3D Secure initialized',
                         orderId: order._id,
                         orderCode: order.orderCode,
-                        paymentId: result.paymentId,
+                        threeDSHtmlContent: result.threeDSHtmlContent,
+                        status: 'waiting_3d_secure',
                         restaurant: {
                             name: restaurant.name,
                             address: restaurant.district + ' - ' + restaurant.city
@@ -264,6 +268,117 @@ router.get('/test-connection', (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Connection test failed'
+        });
+    }
+});
+
+// @route   POST /payment/3ds-callback
+// @desc    Handle 3D Secure callback from Iyzico
+// @access  Public (Iyzico calls this)
+router.post('/3ds-callback', async (req, res) => {
+    try {
+        console.log('🔒 3D Secure callback received:', req.body);
+
+        const { token, conversationId } = req.body;
+
+        if (!token || !conversationId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing token or conversationId'
+            });
+        }
+
+        // Find the order
+        const order = await Order.findById(conversationId);
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                error: 'Order not found'
+            });
+        }
+
+        // Complete 3D Secure payment
+        const request = {
+            locale: 'tr',
+            conversationId: conversationId,
+            paymentId: token
+        };
+
+        iyzipay.threedsPayment.create(request, async (err, result) => {
+            try {
+                if (err) {
+                    console.error('❌ 3D Secure payment error:', err);
+
+                    // Update order status
+                    order.status = 'payment_failed';
+                    order.paymentStatus = 'failed';
+                    await order.save();
+
+                    return res.status(400).json({
+                        success: false,
+                        error: '3D Secure payment failed: ' + err.message
+                    });
+                }
+
+                console.log('🔒 3D Secure payment result:', result);
+
+                if (result.status === 'success') {
+                    // Payment successful
+                    console.log('✅ 3D Secure payment successful:', result.paymentId);
+
+                    // Update order status
+                    order.status = 'confirmed';
+                    order.paymentStatus = 'completed';
+                    order.paymentId = result.paymentId;
+                    await order.save();
+
+                    // Get restaurant and reduce package quantities
+                    const restaurant = await Restaurant.findById(order.restaurantId);
+                    if (restaurant) {
+                        for (const item of order.packages) {
+                            const packageToUpdate = restaurant.packages.id(item.packageId);
+                            if (packageToUpdate && packageToUpdate.quantity > 0) {
+                                packageToUpdate.quantity -= item.quantity || 1;
+
+                                // Auto-deactivate if quantity reaches 0
+                                if (packageToUpdate.quantity <= 0) {
+                                    packageToUpdate.status = 'inactive';
+                                    console.log(`📦 Package ${packageToUpdate.packageName} auto-deactivated (out of stock)`);
+                                }
+                            }
+                        }
+                        await restaurant.save();
+                    }
+
+                    console.log('✅ 3D Secure payment completed and stock updated');
+
+                    // Redirect to mobile app success page
+                    res.redirect(`kaptaze://payment-success?orderId=${order._id}&orderCode=${order.orderCode}`);
+
+                } else {
+                    // Payment failed
+                    console.log('❌ 3D Secure payment failed:', result.errorMessage);
+
+                    order.status = 'payment_failed';
+                    order.paymentStatus = 'failed';
+                    order.iyzicoErrorMessage = result.errorMessage;
+                    await order.save();
+
+                    // Redirect to mobile app failure page
+                    res.redirect(`kaptaze://payment-failed?error=${encodeURIComponent(result.errorMessage)}`);
+                }
+
+            } catch (updateError) {
+                console.error('❌ Error updating order after 3D Secure:', updateError);
+                res.redirect(`kaptaze://payment-failed?error=${encodeURIComponent('Payment processing error')}`);
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ 3D Secure callback error:', error);
+        res.status(500).json({
+            success: false,
+            error: '3D Secure callback processing error'
         });
     }
 });

@@ -21,9 +21,42 @@ const orderSchema = new mongoose.Schema({
   totalAmount: { type: Number, required: true },
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'ready', 'completed', 'cancelled', 'preparing', 'delivered'],
+    enum: ['pending', 'pending_payment', 'waiting_3d_secure', 'confirmed', 'ready', 'completed', 'cancelled', 'preparing', 'delivered', 'payment_failed'],
     default: 'pending'
   },
+
+  // Payment related fields
+  paymentStatus: {
+    type: String,
+    enum: ['waiting', 'waiting_3d_secure', 'completed', 'failed'],
+    default: 'waiting'
+  },
+  paymentId: String,
+  iyzicoToken: String,
+  iyzicoErrorMessage: String,
+  threeDSHtmlContent: String,
+
+  // Consumer reference
+  consumerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Consumer'
+  },
+  restaurantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Restaurant'
+  },
+
+  // Package details for KapTaze orders
+  packages: [{
+    packageId: String,
+    packageName: String,
+    quantity: { type: Number, default: 1 },
+    price: Number
+  }],
+
+  // Order identification
+  orderCode: String,
+  pickupTime: Date,
   paymentMethod: {
     type: String,
     enum: ['cash', 'card', 'online'],

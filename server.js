@@ -256,7 +256,7 @@ const startServer = async () => {
 
         // Start the server with Socket.IO
         server.listen(PORT, () => {
-            console.log('\n🚀 KapTaze API Server Started!');
+            console.log('\n🚀 KapTaze API Server Started! (with Payment Support)');
             console.log(`📍 Server running on port ${PORT}`);
             console.log(`🌐 Environment: ${process.env.NODE_ENV}`);
             console.log(`🔗 Health check: http://localhost:${PORT}/health`);
