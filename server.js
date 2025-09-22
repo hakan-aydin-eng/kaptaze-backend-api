@@ -199,6 +199,7 @@ app.use('/public', publicRoutes);
 app.use('/admin', adminRoutes);
 app.use('/restaurant', restaurantRoutes);
 app.use('/orders', orderRoutes);
+app.use('/payment', require('./routes/payment'));
 
 // Welcome Route
 app.get('/', (req, res) => {
@@ -212,7 +213,8 @@ app.get('/', (req, res) => {
             public: '/public/*',
             admin: '/admin/*',
             restaurant: '/restaurant/*',
-            orders: '/orders/*'
+            orders: '/orders/*',
+            payment: '/payment/*'
         }
     });
 });
@@ -222,7 +224,7 @@ app.use('*', (req, res) => {
     res.status(404).json({
         error: 'Route not found',
         message: `The requested route ${req.originalUrl} does not exist`,
-        availableRoutes: ['/health', '/auth', '/public', '/admin', '/restaurant', '/orders']
+        availableRoutes: ['/health', '/auth', '/public', '/admin', '/restaurant', '/orders', '/payment']
     });
 });
 
