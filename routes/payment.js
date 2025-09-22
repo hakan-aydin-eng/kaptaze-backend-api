@@ -50,12 +50,23 @@ router.post('/create', authenticate, async (req, res, next) => {
         // Create order first (pending payment)
         const orderCode = `KT${Date.now().toString().slice(-6)}`;
         const order = new Order({
+            customer: {
+                id: req.user.id.toString(),
+                name: `${billingInfo.name} ${billingInfo.surname}`,
+                phone: billingInfo.phone || '+905551234567',
+                address: billingInfo.address || `${billingInfo.city}, Turkey`
+            },
+            restaurant: {
+                id: restaurantId,
+                name: restaurant.name
+            },
             consumerId: req.user.id,
             restaurantId,
             packages: basketItems,
             totalAmount: amount,
             status: 'pending_payment',
             paymentStatus: 'waiting',
+            paymentMethod: 'online',
             orderCode,
             pickupTime: new Date(Date.now() + 30 * 60 * 1000) // 30 minutes from now
         });
