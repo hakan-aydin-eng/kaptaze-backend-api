@@ -82,7 +82,7 @@ const consumerSchema = new mongoose.Schema({
         message: { type: String, required: true },
         type: {
             type: String,
-            enum: ['favorite_restaurant', 'promotion', 'location', 'order', 'general'],
+            enum: ['favorite_restaurant', 'favorite_restaurant_package', 'promotion', 'location', 'order', 'general'],
             default: 'general'
         },
         data: {
