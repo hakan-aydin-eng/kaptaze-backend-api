@@ -12,8 +12,8 @@ const Restaurant = require('../models/Restaurant');
 const Consumer = require('../models/Consumer');
 
 // Iyzico Test Configuration with debugging - Updated working sandbox credentials
-const iyzicoApiKey = process.env.IYZICO_API_KEY || 'sandbox-8h8RPBqHU2WX8KgfHQkOyP6vGlq';
-const iyzicoSecretKey = process.env.IYZICO_SECRET_KEY || 'sandbox-sK6i8F7sHpWJV2g0hgYVKJGNjF0';
+const iyzicoApiKey = process.env.IYZICO_API_KEY || 'sandbox-8mSp0YHi11QvAjBErYNxvaQLhBZrQnLI';
+const iyzicoSecretKey = process.env.IYZICO_SECRET_KEY || 'sandbox-Hxgm51ZvcJLpF5mEKLHgRm1aDyiD64yt';
 // Force sandbox mode for testing even in production environment
 const iyzicoUri = 'https://sandbox-api.iyzipay.com';
 
