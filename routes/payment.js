@@ -325,14 +325,32 @@ router.get('/test-connection', (req, res) => {
 // @access  Public (Iyzico calls this)
 router.post('/3ds-callback', async (req, res) => {
     try {
-        console.log('🔒 3D Secure callback received:', req.body);
+        console.log('🔒 3D Secure callback received - ALL DATA:', {
+            body: req.body,
+            query: req.query,
+            headers: req.headers,
+            method: req.method,
+            url: req.url
+        });
 
-        const { token, conversationId } = req.body;
+        // Try multiple parameter name variations that Iyzico might send
+        const token = req.body.token || req.body.paymentId || req.query.token || req.query.paymentId;
+        const conversationId = req.body.conversationId || req.body.orderId || req.query.conversationId || req.query.orderId;
+
+        console.log('🔒 Extracted values:', { token, conversationId });
 
         if (!token || !conversationId) {
+            console.log('🔒 Missing required values. Available keys in body:', Object.keys(req.body));
+            console.log('🔒 Available keys in query:', Object.keys(req.query));
             return res.status(400).json({
                 success: false,
-                error: 'Missing token or conversationId'
+                error: 'Missing token or conversationId',
+                receivedData: {
+                    bodyKeys: Object.keys(req.body),
+                    queryKeys: Object.keys(req.query),
+                    body: req.body,
+                    query: req.query
+                }
             });
         }
 
