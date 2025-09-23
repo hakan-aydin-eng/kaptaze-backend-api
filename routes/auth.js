@@ -1421,22 +1421,106 @@ router.get('/orders/:orderId/rating', authenticate, async (req, res, next) => {
 });
 
 // @route   GET /auth/surprise-stories
-// @desc    Get public rating photos for main page stories
+// @desc    Get public rating photos for main page stories (filtered by user's city)
 // @access  Public
 router.get('/surprise-stories', async (req, res, next) => {
     try {
         const limit = parseInt(req.query.limit) || 20;
+        const userCity = req.query.city; // User's city from frontend
 
-        // Get recent ratings with photos
-        const stories = await Rating.find({
+        console.log('🏙️ Surprise stories request for city:', userCity || 'all cities');
+
+        // Base query for ratings with photos
+        let query = {
             'photos.0': { $exists: true }, // Has at least one photo
             isPublic: true
-        })
-        .populate('restaurantId', 'name')
-        .populate('consumerId', 'name')
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .lean();
+        };
+
+        // Get recent ratings with photos, optionally filtered by city
+        const storiesQuery = Rating.find(query)
+            .populate({
+                path: 'restaurantId',
+                select: 'name district city location'
+            })
+            .populate('consumerId', 'name')
+            .sort({ createdAt: -1 })
+            .limit(limit * 2); // Get more to filter by city
+
+        const allStories = await storiesQuery.lean();
+
+        // Filter by city if provided
+        let stories = allStories;
+        if (userCity) {
+            // Turkish city mapping for better location matching
+            const cityMappings = {
+                // Antalya districts -> Antalya city
+                'guzeloluk': 'antalya',
+                'güzeloluk': 'antalya',
+                'konyaalti': 'antalya',
+                'konyaaltı': 'antalya',
+                'muratpasa': 'antalya',
+                'muratpaşa': 'antalya',
+                'kepez': 'antalya',
+                'lara': 'antalya',
+                'kundu': 'antalya',
+                // Istanbul districts -> Istanbul city
+                'besiktas': 'istanbul',
+                'beşiktaş': 'istanbul',
+                'sisli': 'istanbul',
+                'şişli': 'istanbul',
+                'kadikoy': 'istanbul',
+                'kadıköy': 'istanbul',
+                'uskudar': 'istanbul',
+                'üsküdar': 'istanbul',
+                'fatih': 'istanbul',
+                'beyoglu': 'istanbul',
+                'beyoğlu': 'istanbul',
+                // Add more mappings as needed
+            };
+
+            // Get the main city from user's location
+            const userCityNormalized = userCity.toLowerCase().trim();
+            const mainCity = cityMappings[userCityNormalized] || userCityNormalized;
+
+            console.log(`🏙️ User location: "${userCity}" -> normalized: "${userCityNormalized}" -> main city: "${mainCity}"`);
+
+            stories = allStories.filter(story => {
+                const restaurantCity = story.restaurantId?.city;
+                const restaurantDistrict = story.restaurantId?.district;
+
+                // Normalize restaurant location
+                const restaurantCityNormalized = restaurantCity?.toLowerCase().trim() || '';
+                const restaurantDistrictNormalized = restaurantDistrict?.toLowerCase().trim() || '';
+
+                // Check if restaurant is in the same main city
+                const isInMainCity = restaurantCityNormalized.includes(mainCity) ||
+                                   cityMappings[restaurantDistrictNormalized] === mainCity ||
+                                   cityMappings[restaurantCityNormalized] === mainCity;
+
+                // Also allow direct district/city matches for flexibility
+                const isDirectMatch = restaurantCityNormalized.includes(userCityNormalized) ||
+                                     restaurantDistrictNormalized.includes(userCityNormalized);
+
+                const matches = isInMainCity || isDirectMatch;
+
+                if (matches) {
+                    console.log(`✅ Match found: Restaurant in ${restaurantCity}/${restaurantDistrict} matches user in ${userCity}`);
+                }
+
+                return matches;
+            });
+
+            // If no stories in user's city, fallback to all stories
+            if (stories.length === 0) {
+                console.log('⚠️ No stories found for city/region:', userCity, '- showing all stories');
+                stories = allStories;
+            } else {
+                console.log('✅ Found', stories.length, 'stories for city/region:', userCity);
+            }
+        }
+
+        // Limit to requested amount
+        stories = stories.slice(0, limit);
 
         // Format for frontend
         const formattedStories = stories.map(story => ({
@@ -1461,6 +1545,83 @@ router.get('/surprise-stories', async (req, res, next) => {
 
     } catch (error) {
         console.error('Get surprise stories error:', error);
+        next(error);
+    }
+});
+
+// @route   POST /auth/refresh-token
+// @desc    Refresh JWT token
+// @access  Public (using expired token)
+router.post('/refresh-token', async (req, res, next) => {
+    try {
+        const { token } = req.body;
+
+        if (!token) {
+            return res.status(400).json({
+                success: false,
+                error: 'Token is required'
+            });
+        }
+
+        // Verify the expired token (ignore expiration for refresh)
+        let decoded;
+        try {
+            decoded = jwt.verify(token, process.env.JWT_SECRET, { ignoreExpiration: true });
+        } catch (error) {
+            return res.status(401).json({
+                success: false,
+                error: 'Invalid token'
+            });
+        }
+
+        // Check if user still exists
+        let user;
+        if (decoded.userType === 'consumer') {
+            user = await Consumer.findById(decoded.id);
+        } else {
+            user = await User.findById(decoded.id);
+        }
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                error: 'User not found'
+            });
+        }
+
+        // Generate new token
+        const newToken = jwt.sign(
+            {
+                id: user._id,
+                userType: decoded.userType,
+                email: user.email
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+        );
+
+        console.log(`🔄 Token refreshed for: ${user.email} (${decoded.userType})`);
+
+        res.json({
+            success: true,
+            message: 'Token refreshed successfully',
+            data: {
+                token: newToken,
+                user: {
+                    id: user._id,
+                    email: user.email,
+                    userType: decoded.userType,
+                    ...(decoded.userType === 'consumer' && {
+                        name: user.name,
+                        surname: user.surname,
+                        phone: user.phone
+                    })
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Token refresh error:', error);
         next(error);
     }
 });
