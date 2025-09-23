@@ -393,7 +393,7 @@ router.post('/3ds-callback', async (req, res) => {
                     console.log('✅ 3D Secure payment successful:', result.paymentId);
 
                     // Update order status
-                    order.status = 'confirmed';
+                    order.status = 'pending';  // Changed from 'confirmed' to 'pending' so restaurant can approve
                     order.paymentStatus = 'completed';
                     order.paymentId = result.paymentId;
                     await order.save();
@@ -417,6 +417,42 @@ router.post('/3ds-callback', async (req, res) => {
                     }
 
                     console.log('✅ 3D Secure payment completed and stock updated');
+
+                    // Send Socket.IO notification to restaurant panel
+                    try {
+                        // Try to get io instance from request object
+                        let io, restaurantSockets;
+
+                        if (req.app) {
+                            io = req.app.get('io');
+                            restaurantSockets = req.app.get('restaurantSockets');
+                        }
+
+                        // Alternative: Access from global if available
+                        if (!io && global.socketIO) {
+                            io = global.socketIO.io;
+                            restaurantSockets = global.socketIO.restaurantSockets;
+                        }
+
+                        if (io) {
+                            console.log(`🔔 Sending Socket.IO notification to restaurant ${order.restaurantId}`);
+                            console.log(`📊 Restaurant connected sockets:`, restaurantSockets ? restaurantSockets.size : 'not available');
+
+                            // Send notification to restaurant room
+                            io.to(`restaurant-${order.restaurantId}`).emit('new-order', {
+                                order: order,
+                                message: 'Yeni online sipariş aldınız! 💳',
+                                timestamp: new Date()
+                            });
+
+                            console.log(`✅ Socket.IO notification sent to restaurant-${order.restaurantId}`);
+                        } else {
+                            console.log('⚠️ Socket.IO instance not available in payment callback');
+                        }
+                    } catch (notificationError) {
+                        console.error('❌ Failed to send Socket.IO notification:', notificationError);
+                        // Don't fail the payment if notification fails
+                    }
 
                     // Send success HTML that mobile app can capture
                     res.send(`

@@ -19,6 +19,7 @@ const publicRoutes = require('./routes/public');
 const adminRoutes = require('./routes/admin');
 const restaurantRoutes = require('./routes/restaurant');
 const orderRoutes = require('./routes/orders');
+const paymentRoutes = require('./routes/payment');
 
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
