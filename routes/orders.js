@@ -142,7 +142,7 @@ router.post('/', async (req, res) => {
 
         if (io && restaurantSockets.has(restaurantId)) {
             console.log(`📡 Sending real-time notification to restaurant ${restaurantId}`);
-            io.to(`restaurant-${restaurantId}`).emit('newOrder', {
+            io.to(`restaurant-${restaurantId}`).emit('new-order', {
                 order: savedOrder,
                 message: 'Yeni sipariş aldınız!'
             });

@@ -311,26 +311,150 @@ router.get('/menu', async (req, res, next) => {
 // @access  Private (Restaurant)
 router.get('/orders', async (req, res, next) => {
     try {
-        const { status, page = 1, limit = 20 } = req.query;
+        const { status, page = 1, limit = 20, date } = req.query;
 
-        // TODO: Implement order model and logic
-        // For now, return placeholder
+        const restaurant = await Restaurant.findOne({ ownerId: req.user._id });
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Restaurant profile not found'
+            });
+        }
+
+        console.log(`🔍 Getting orders for restaurant: ${restaurant._id}`);
+
+        // Import Order model
+        const Order = require('../models/Order');
+        const mongoose = require('mongoose');
+
+        // Build query
+        let query = {
+            $or: [
+                { 'restaurant.id': restaurant._id },
+                { 'restaurant.id': restaurant._id.toString() }
+            ]
+        };
+
+        if (status) {
+            query.status = status;
+            console.log(`📋 Filtering by status: ${status}`);
+        }
+
+        if (date) {
+            const startDate = new Date(date);
+            startDate.setHours(0, 0, 0, 0);
+            const endDate = new Date(date);
+            endDate.setHours(23, 59, 59, 999);
+            query.createdAt = { $gte: startDate, $lte: endDate };
+            console.log(`📅 Filtering by date: ${date}`);
+        }
+
+        console.log('🔍 MongoDB query:', JSON.stringify(query, null, 2));
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const orders = await Order.find(query)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parseInt(limit));
+
+        const total = await Order.countDocuments(query);
+
+        console.log(`📦 Found ${orders.length} orders for restaurant ${restaurant.name}`);
+
         res.json({
             success: true,
-            message: 'Order functionality will be implemented next',
             data: {
-                orders: [],
+                orders: orders,
                 pagination: {
                     page: parseInt(page),
                     limit: parseInt(limit),
-                    total: 0,
-                    pages: 0
-                },
-                note: 'Order management will be added in the next phase'
+                    total: total,
+                    pages: Math.ceil(total / parseInt(limit))
+                }
             }
         });
 
     } catch (error) {
+        console.error('Get restaurant orders error:', error);
+        next(error);
+    }
+});
+
+// @route   PATCH /restaurant/orders/:orderId/status
+// @desc    Update order status
+// @access  Private (Restaurant)
+router.patch('/orders/:orderId/status', async (req, res, next) => {
+    try {
+        const { orderId } = req.params;
+        const { status, estimatedDeliveryTime } = req.body;
+
+        console.log(`🔄 Restaurant updating order ${orderId} status to: ${status}`);
+
+        const restaurant = await Restaurant.findOne({ ownerId: req.user._id });
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Restaurant profile not found'
+            });
+        }
+
+        const Order = require('../models/Order');
+        const order = await Order.findById(orderId);
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                error: 'Order not found'
+            });
+        }
+
+        // Verify this order belongs to this restaurant
+        if (order.restaurant.id.toString() !== restaurant._id.toString()) {
+            return res.status(403).json({
+                success: false,
+                error: 'Not authorized to update this order'
+            });
+        }
+
+        const oldStatus = order.status;
+        order.status = status;
+
+        if (estimatedDeliveryTime) {
+            order.estimatedDeliveryTime = estimatedDeliveryTime;
+        }
+
+        await order.save();
+
+        console.log(`✅ Order ${orderId} status updated: ${oldStatus} → ${status}`);
+
+        // Send real-time notification to mobile app via Socket.IO
+        const io = req.app.get('io');
+        if (io) {
+            console.log(`📱 Sending order status update to mobile app - order-update-${orderId}`);
+            io.emit(`order-update-${orderId}`, {
+                orderId: order._id,
+                status: order.status,
+                estimatedDeliveryTime: order.estimatedDeliveryTime,
+                restaurant: {
+                    name: restaurant.name,
+                    id: restaurant._id
+                }
+            });
+            console.log(`✅ Socket.IO notification sent for order ${orderId}`);
+        }
+
+        res.json({
+            success: true,
+            message: 'Order status updated successfully',
+            data: {
+                orderId: order._id,
+                status: order.status,
+                estimatedDeliveryTime: order.estimatedDeliveryTime
+            }
+        });
+
+    } catch (error) {
+        console.error('Update order status error:', error);
         next(error);
     }
 });
