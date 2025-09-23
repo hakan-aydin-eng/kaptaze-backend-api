@@ -142,7 +142,18 @@ const consumerSchema = new mongoose.Schema({
         },
         active: { type: Boolean, default: true },
         lastUsed: { type: Date, default: Date.now }
-    }]
+    }],
+
+    // Saved payment card - Iyzico tokenization
+    savedCard: {
+        cardToken: { type: String, trim: true }, // Iyzico card token
+        lastFourDigits: { type: String, trim: true, maxlength: 4 },
+        cardType: { type: String, trim: true }, // Visa, MasterCard, etc.
+        expiryMonth: { type: String, trim: true },
+        expiryYear: { type: String, trim: true },
+        holderName: { type: String, trim: true },
+        savedAt: { type: Date, default: Date.now }
+    }
 }, {
     timestamps: true,
     toJSON: { 
