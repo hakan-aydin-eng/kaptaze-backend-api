@@ -418,8 +418,92 @@ router.post('/3ds-callback', async (req, res) => {
 
                     console.log('✅ 3D Secure payment completed and stock updated');
 
-                    // Redirect to mobile app success page
-                    res.redirect(`kaptaze://payment-success?orderId=${order._id}&orderCode=${order.orderCode}`);
+                    // Send success HTML that mobile app can capture
+                    res.send(`
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <meta charset="utf-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1">
+                            <title>Ödeme Başarılı</title>
+                            <style>
+                                body {
+                                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+                                    margin: 0;
+                                    padding: 20px;
+                                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                    color: white;
+                                    text-align: center;
+                                    min-height: 100vh;
+                                    display: flex;
+                                    flex-direction: column;
+                                    justify-content: center;
+                                    align-items: center;
+                                }
+                                .success-container {
+                                    background: rgba(255,255,255,0.1);
+                                    padding: 40px 30px;
+                                    border-radius: 20px;
+                                    backdrop-filter: blur(10px);
+                                    border: 1px solid rgba(255,255,255,0.2);
+                                    max-width: 400px;
+                                    width: 100%;
+                                }
+                                .checkmark {
+                                    font-size: 60px;
+                                    margin-bottom: 20px;
+                                    animation: bounce 1s ease-in-out;
+                                }
+                                @keyframes bounce {
+                                    0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+                                    40% { transform: translateY(-10px); }
+                                    60% { transform: translateY(-5px); }
+                                }
+                                h1 { margin: 0 0 20px 0; font-size: 28px; }
+                                .order-code {
+                                    background: rgba(255,255,255,0.2);
+                                    padding: 15px;
+                                    border-radius: 10px;
+                                    margin: 20px 0;
+                                    font-size: 18px;
+                                    font-weight: bold;
+                                }
+                                .message { font-size: 16px; line-height: 1.5; margin-bottom: 30px; }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="success-container">
+                                <div class="checkmark">🎉</div>
+                                <h1>Ödeme Başarılı!</h1>
+                                <div class="order-code">Sipariş: ${order.orderCode}</div>
+                                <div class="message">
+                                    Siparişiniz onaylandı. Restorana giderek teslim alabilirsiniz.
+                                </div>
+                            </div>
+                            <script>
+                                // Send success message to React Native WebView
+                                if (window.ReactNativeWebView) {
+                                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                                        type: 'PAYMENT_SUCCESS',
+                                        orderId: '${order._id}',
+                                        orderCode: '${order.orderCode}'
+                                    }));
+                                }
+
+                                // Auto-close after 3 seconds
+                                setTimeout(() => {
+                                    if (window.ReactNativeWebView) {
+                                        window.ReactNativeWebView.postMessage(JSON.stringify({
+                                            type: 'PAYMENT_SUCCESS_AUTO_CLOSE',
+                                            orderId: '${order._id}',
+                                            orderCode: '${order.orderCode}'
+                                        }));
+                                    }
+                                }, 3000);
+                            </script>
+                        </body>
+                        </html>
+                    `);
 
                 } else {
                     // Payment failed
@@ -430,13 +514,149 @@ router.post('/3ds-callback', async (req, res) => {
                     order.iyzicoErrorMessage = result.errorMessage;
                     await order.save();
 
-                    // Redirect to mobile app failure page
-                    res.redirect(`kaptaze://payment-failed?error=${encodeURIComponent(result.errorMessage)}`);
+                    // Send failure HTML that mobile app can capture
+                    res.send(`
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <meta charset="utf-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1">
+                            <title>Ödeme Başarısız</title>
+                            <style>
+                                body {
+                                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+                                    margin: 0;
+                                    padding: 20px;
+                                    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+                                    color: white;
+                                    text-align: center;
+                                    min-height: 100vh;
+                                    display: flex;
+                                    flex-direction: column;
+                                    justify-content: center;
+                                    align-items: center;
+                                }
+                                .error-container {
+                                    background: rgba(255,255,255,0.1);
+                                    padding: 40px 30px;
+                                    border-radius: 20px;
+                                    backdrop-filter: blur(10px);
+                                    border: 1px solid rgba(255,255,255,0.2);
+                                    max-width: 400px;
+                                    width: 100%;
+                                }
+                                .error-icon {
+                                    font-size: 60px;
+                                    margin-bottom: 20px;
+                                }
+                                h1 { margin: 0 0 20px 0; font-size: 28px; }
+                                .error-message {
+                                    background: rgba(255,255,255,0.2);
+                                    padding: 15px;
+                                    border-radius: 10px;
+                                    margin: 20px 0;
+                                    font-size: 16px;
+                                }
+                                .message { font-size: 16px; line-height: 1.5; margin-bottom: 30px; }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="error-container">
+                                <div class="error-icon">❌</div>
+                                <h1>Ödeme Başarısız</h1>
+                                <div class="error-message">${result.errorMessage || 'Ödeme işlemi tamamlanamadı'}</div>
+                                <div class="message">
+                                    Lütfen tekrar deneyiniz veya farklı bir kart kullanınız.
+                                </div>
+                            </div>
+                            <script>
+                                // Send failure message to React Native WebView
+                                if (window.ReactNativeWebView) {
+                                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                                        type: 'PAYMENT_FAILED',
+                                        error: '${result.errorMessage || 'Ödeme işlemi tamamlanamadı'}'
+                                    }));
+                                }
+
+                                // Auto-close after 3 seconds
+                                setTimeout(() => {
+                                    if (window.ReactNativeWebView) {
+                                        window.ReactNativeWebView.postMessage(JSON.stringify({
+                                            type: 'PAYMENT_FAILED_AUTO_CLOSE',
+                                            error: '${result.errorMessage || 'Ödeme işlemi tamamlanamadı'}'
+                                        }));
+                                    }
+                                }, 3000);
+                            </script>
+                        </body>
+                        </html>
+                    `);
                 }
 
             } catch (updateError) {
                 console.error('❌ Error updating order after 3D Secure:', updateError);
-                res.redirect(`kaptaze://payment-failed?error=${encodeURIComponent('Payment processing error')}`);
+                res.send(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1">
+                        <title>Ödeme Hatası</title>
+                        <style>
+                            body {
+                                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+                                margin: 0;
+                                padding: 20px;
+                                background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+                                color: white;
+                                text-align: center;
+                                min-height: 100vh;
+                                display: flex;
+                                flex-direction: column;
+                                justify-content: center;
+                                align-items: center;
+                            }
+                            .error-container {
+                                background: rgba(255,255,255,0.1);
+                                padding: 40px 30px;
+                                border-radius: 20px;
+                                backdrop-filter: blur(10px);
+                                border: 1px solid rgba(255,255,255,0.2);
+                                max-width: 400px;
+                                width: 100%;
+                            }
+                            .error-icon { font-size: 60px; margin-bottom: 20px; }
+                            h1 { margin: 0 0 20px 0; font-size: 28px; }
+                            .message { font-size: 16px; line-height: 1.5; margin-bottom: 30px; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="error-container">
+                            <div class="error-icon">❌</div>
+                            <h1>Ödeme Hatası</h1>
+                            <div class="message">
+                                Ödeme işlemi sırasında bir hata oluştu. Lütfen tekrar deneyiniz.
+                            </div>
+                        </div>
+                        <script>
+                            if (window.ReactNativeWebView) {
+                                window.ReactNativeWebView.postMessage(JSON.stringify({
+                                    type: 'PAYMENT_FAILED',
+                                    error: 'Payment processing error'
+                                }));
+                            }
+                            setTimeout(() => {
+                                if (window.ReactNativeWebView) {
+                                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                                        type: 'PAYMENT_FAILED_AUTO_CLOSE',
+                                        error: 'Payment processing error'
+                                    }));
+                                }
+                            }, 3000);
+                        </script>
+                    </body>
+                    </html>
+                `);
             }
         });
 
