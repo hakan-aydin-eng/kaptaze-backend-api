@@ -327,11 +327,13 @@ router.get('/orders', async (req, res, next) => {
         const Order = require('../models/Order');
         const mongoose = require('mongoose');
 
-        // Build query
+        // Build query - check all possible restaurant ID field patterns
         let query = {
             $or: [
                 { 'restaurant.id': restaurant._id },
-                { 'restaurant.id': restaurant._id.toString() }
+                { 'restaurant.id': restaurant._id.toString() },
+                { 'restaurantId': restaurant._id },
+                { 'restaurantId': restaurant._id.toString() }
             ]
         };
 
@@ -349,7 +351,7 @@ router.get('/orders', async (req, res, next) => {
             console.log(`📅 Filtering by date: ${date}`);
         }
 
-        console.log('🔍 MongoDB query:', JSON.stringify(query, null, 2));
+        console.log('🔍 MongoDB query for restaurant', restaurant._id, ':', JSON.stringify(query, null, 2));
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
         const orders = await Order.find(query)
