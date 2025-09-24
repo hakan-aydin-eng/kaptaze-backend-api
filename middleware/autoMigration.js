@@ -12,6 +12,11 @@ async function autoMigrationMiddleware(req, res, next) {
             return next();
         }
 
+        // Only migrate consumers, skip system users (admin/restaurant)
+        if (req.user.userType !== 'consumer') {
+            return next();
+        }
+
         // Check if user needs schema updates
         const user = await Consumer.findById(req.user.id);
         if (!user) {
