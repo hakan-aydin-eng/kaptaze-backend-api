@@ -85,7 +85,8 @@ const authenticate = async (req, res, next) => {
             req.user = {
                 ...user.toObject(),
                 id: user._id.toString(),
-                _id: user._id
+                _id: user._id,
+                userType: user.userType // Ensure userType is passed to middleware
             };
 
             // Apply auto-migration for authenticated users
