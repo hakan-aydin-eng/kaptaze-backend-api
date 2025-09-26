@@ -14,33 +14,27 @@ const Consumer = require('../models/Consumer');
 const Package = require('../models/Package');
 const NotificationLog = require('../models/NotificationLog');
 // SendGrid email service - now active with proper configuration
-const { sendOrderNotification } = require('../services/emailService');
 const { runBulkMigration } = require('../scripts/bulkMigration');
 
 const router = express.Router();
 
 // Email service functions
 async function sendApprovalEmail(application, credentials) {
-    const nodemailer = require('nodemailer');
+    console.log('🔧 DEBUG sendApprovalEmail function called');
+    console.log('🔧 Environment check - SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY ? 'SET' : 'NOT SET');
+    console.log('🔧 Environment check - EMAIL_USER:', process.env.EMAIL_USER ? 'SET' : 'NOT SET');
+    console.log('🔧 Environment check - EMAIL_PASS:', process.env.EMAIL_PASS ? 'SET' : 'NOT SET');
 
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-        throw new Error('Gmail credentials not configured');
+    const sgMail = require('@sendgrid/mail');
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+    if (!process.env.SENDGRID_API_KEY) {
+        console.error('❌ SendGrid API key missing - cannot send email');
+        throw new Error('SendGrid API key not configured');
     }
 
-    // Gmail transporter konfigürasyonu
-    const transporter = nodemailer.createTransporter({
-        service: 'gmail',
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS
-        }
-    });
-
     const mailOptions = {
-        from: {
-            name: 'KapTaze Restaurant Platform',
-            address: process.env.EMAIL_USER
-        },
+        from: process.env.SENDGRID_FROM_EMAIL || 'noreply@kaptaze.com',
         to: application.email,
         subject: '🎉 KapTaze Başvurunuz Onaylandı - Giriş Bilgileriniz',
         replyTo: 'destek@kaptaze.com',
@@ -144,7 +138,7 @@ async function sendApprovalEmail(application, credentials) {
                         </div>
 
                         <center>
-                            <a href="https://kaptaze.com/restaurant-login.html" class="button">
+                            <a href="https://kaptaze.com/restaurant-login" class="button">
                                 🏪 Restoran Panelime Giriş Yap
                             </a>
                         </center>
@@ -168,13 +162,13 @@ async function sendApprovalEmail(application, credentials) {
     };
 
     try {
-        console.log('📧 Sending approval email via Gmail...');
-        const result = await transporter.sendMail(mailOptions);
-        console.log('✅ Approval email sent successfully via Gmail');
-        console.log('📧 Message ID:', result.messageId);
-        return { success: true, messageId: result.messageId };
+        console.log('📧 Sending approval email via SendGrid...');
+        const result = await sgMail.send(mailOptions);
+        console.log('✅ Approval email sent successfully via SendGrid');
+        console.log('📧 Message ID:', result[0].headers['x-message-id']);
+        return { success: true, messageId: result[0].headers['x-message-id'] };
     } catch (error) {
-        console.error('❌ Gmail approval email failed:', error);
+        console.error('❌ SendGrid approval email failed:', error);
         return { success: false, error: error.message };
     }
 }
@@ -437,6 +431,7 @@ router.post('/applications/:applicationId/approve', [
         application.userId = restaurantUser._id;
         application.generatedCredentials = {
             username: finalUsername,
+            password: finalPassword, // Plain text for email
             passwordHash: restaurantUser.password,
             createdAt: new Date()
         };
