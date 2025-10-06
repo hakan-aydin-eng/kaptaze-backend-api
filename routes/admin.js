@@ -163,13 +163,42 @@ async function sendApprovalEmail(application, credentials) {
 
     try {
         console.log('📧 Sending approval email via SendGrid...');
+        console.log('📧 From email:', process.env.SENDGRID_FROM_EMAIL || 'bilgi@kapkazan.com');
         const result = await sgMail.send(mailOptions);
         console.log('✅ Approval email sent successfully via SendGrid');
         console.log('📧 Message ID:', result[0].headers['x-message-id']);
         return { success: true, messageId: result[0].headers['x-message-id'] };
-    } catch (error) {
-        console.error('❌ SendGrid approval email failed:', error);
-        return { success: false, error: error.message };
+    } catch (sendgridError) {
+        console.error('❌ SendGrid approval email failed:', sendgridError);
+        console.log('🔄 Trying Gmail as fallback...');
+
+        // Gmail fallback
+        try {
+            const nodemailer = require('nodemailer');
+
+            const transporter = nodemailer.createTransport({
+                service: 'gmail',
+                auth: {
+                    user: process.env.EMAIL_USER,
+                    pass: process.env.EMAIL_PASS
+                }
+            });
+
+            const gmailOptions = {
+                from: `kapkazan <${process.env.EMAIL_USER}>`,
+                to: application.email,
+                subject: mailOptions.subject,
+                html: mailOptions.html
+            };
+
+            console.log('📧 Sending via Gmail from:', process.env.EMAIL_USER);
+            const gmailResult = await transporter.sendMail(gmailOptions);
+            console.log('✅ Approval email sent successfully via Gmail fallback');
+            return { success: true, messageId: gmailResult.messageId, method: 'gmail' };
+        } catch (gmailError) {
+            console.error('❌ Gmail fallback also failed:', gmailError);
+            return { success: false, error: `SendGrid: ${sendgridError.message}, Gmail: ${gmailError.message}` };
+        }
     }
 }
 
