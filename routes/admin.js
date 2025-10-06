@@ -34,10 +34,10 @@ async function sendApprovalEmail(application, credentials) {
     }
 
     const mailOptions = {
-        from: process.env.SENDGRID_FROM_EMAIL || 'noreply@kaptaze.com',
+        from: process.env.SENDGRID_FROM_EMAIL || 'bilgi@kapkazan.com',
         to: application.email,
-        subject: '🎉 KapTaze Başvurunuz Onaylandı - Giriş Bilgileriniz',
-        replyTo: 'destek@kaptaze.com',
+        subject: '🎉 kapkazan Başvurunuz Onaylandı - Giriş Bilgileriniz',
+        replyTo: 'bilgi@kapkazan.com',
         html: `
             <!DOCTYPE html>
             <html>
@@ -122,7 +122,7 @@ async function sendApprovalEmail(application, credentials) {
                     <div class="content">
                         <p>Merhaba <strong>${application.firstName} ${application.lastName}</strong>,</p>
 
-                        <p>KapTaze restoranlar platformuna başvurunuz onaylanmıştır. Hoşgeldiniz!</p>
+                        <p>kapkazan restoranlar platformuna başvurunuz onaylanmıştır. Hoşgeldiniz!</p>
 
                         <div class="credentials">
                             <h2>🔑 Giriş Bilgileriniz</h2>
@@ -138,7 +138,7 @@ async function sendApprovalEmail(application, credentials) {
                         </div>
 
                         <center>
-                            <a href="https://kaptaze.com/restaurant-login" class="button">
+                            <a href="https://kapkazan.com/restaurant-login" class="button">
                                 🏪 Restoran Panelime Giriş Yap
                             </a>
                         </center>
@@ -147,13 +147,13 @@ async function sendApprovalEmail(application, credentials) {
                         <ul>
                             <li>Giriş bilgilerinizi güvenli bir yerde saklayın</li>
                             <li>İlk girişinizde şifrenizi değiştirmenizi öneririz</li>
-                            <li>Herhangi bir sorun yaşarsanız destek@kaptaze.com adresinden bize ulaşabilirsiniz</li>
+                            <li>Herhangi bir sorun yaşarsanız bilgi@kapkazan.com adresinden bize ulaşabilirsiniz</li>
                         </ul>
                     </div>
 
                     <div class="footer">
-                        <p>KapTaze Restaurant Platform | Restoranınız için daha iyi bir deneyim</p>
-                        <p>Destek: destek@kaptaze.com | Web: kaptaze.com</p>
+                        <p>kapkazan Restaurant Platform | Restoranınız için daha iyi bir deneyim</p>
+                        <p>Destek: bilgi@kapkazan.com | Web: kapkazan.com</p>
                     </div>
                 </div>
             </body>

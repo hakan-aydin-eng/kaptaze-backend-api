@@ -7,20 +7,20 @@ console.log('📧 SendGrid initialized:', process.env.SENDGRID_API_KEY ? 'API Ke
 
 const sendWelcomeEmail = async (userEmail, userName) => {
   console.log('📧 Sending welcome email to:', userEmail);
-  
-  const fromAddress = process.env.SENDGRID_FROM_EMAIL || 'welcome@kaptaze.com';
-  
+
+  const fromAddress = process.env.SENDGRID_FROM_EMAIL || 'bilgi@kapkazan.com';
+
   const msg = {
     to: userEmail,
     from: {
       email: fromAddress,
-      name: 'KapTaze Hoşgeldin'
+      name: 'kapkazan Hoşgeldin'
     },
-    subject: '🎉 KapTaze\'ye Hoş Geldiniz!',
+    subject: '🎉 kapkazan\'a Hoş Geldiniz!',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #16a34a;">🎉 Hoş Geldiniz ${userName}!</h2>
-        <p>KapTaze ailesine katıldığınız için teşekkür ederiz!</p>
+        <p>kapkazan ailesine katıldığınız için teşekkür ederiz!</p>
         <p>Artık yakınınızdaki restoranlardan %50'ye varan indirimlerle lezzetli yemeklere ulaşabilirsiniz.</p>
         <p style="color: #16a34a; font-weight: bold;">İyi alışverişler dileriz! 🌱</p>
       </div>
@@ -43,18 +43,18 @@ const sendOrderNotification = async (order, restaurantEmail) => {
   console.log('📧 To:', restaurantEmail);
 
   // From adresi - SendGrid verified sender
-  const fromAddress = process.env.SENDGRID_FROM_EMAIL || 'siparis@kaptaze.com';
-  
+  const fromAddress = process.env.SENDGRID_FROM_EMAIL || 'bilgi@kapkazan.com';
+
   console.log('📧 From:', fromAddress);
 
   const msg = {
     to: restaurantEmail,
     from: {
       email: fromAddress,
-      name: 'KapTaze Sipariş Sistemi'
+      name: 'kapkazan Sipariş Sistemi'
     },
     subject: `🔔 Yeni Sipariş - ${order.customer.name}`,
-    replyTo: 'destek@kaptaze.com',
+    replyTo: 'bilgi@kapkazan.com',
     html: `
       <!DOCTYPE html>
       <html>
@@ -197,15 +197,15 @@ const sendOrderNotification = async (order, restaurantEmail) => {
             </div>
             
             <center>
-              <a href="${process.env.FRONTEND_URL || 'https://kaptaze.com'}/restaurant-panel" class="button">
+              <a href="${process.env.FRONTEND_URL || 'https://kapkazan.com'}/restaurant-panel" class="button">
                 🍽️ Panele Git ve Siparişi Yönet
               </a>
             </center>
           </div>
           
           <div class="footer">
-            <p>KapTaze Sipariş Sistemi | Restoranınız için daha iyi bir deneyim</p>
-            <p>Destek: destek@kaptaze.com | Web: kaptaze.com</p>
+            <p>kapkazan Sipariş Sistemi | Restoranınız için daha iyi bir deneyim</p>
+            <p>Destek: bilgi@kapkazan.com | Web: kapkazan.com</p>
           </div>
         </div>
       </body>

@@ -45,18 +45,18 @@ async function sendManualCredentials() {
     <body>
         <div class="container">
             <div class="header">
-                <div class="logo">🍽️ KapTaze</div>
+                <div class="logo">🍽️ kapkazan</div>
                 <h2>Restoran Paneli Giriş Bilgileriniz</h2>
             </div>
 
             <p>Merhaba <strong>${userCredentials.firstName} ${userCredentials.lastName}</strong>,</p>
 
-            <p><strong>${userCredentials.businessName}</strong> işletmenizin KapTaze platformuna kaydı başarıyla tamamlanmıştır! 🎉</p>
+            <p><strong>${userCredentials.businessName}</strong> işletmenizin kapkazan platformuna kaydı başarıyla tamamlanmıştır! 🎉</p>
 
             <div class="credentials">
                 <h3>📋 Giriş Bilgileriniz:</h3>
                 <div class="credential-item">
-                    <strong>🌐 Panel Adresi:</strong> https://kaptaze.com/restaurant
+                    <strong>🌐 Panel Adresi:</strong> https://kapkazan.com/restaurant
                 </div>
                 <div class="credential-item">
                     <strong>👤 Kullanıcı Adı:</strong> ${userCredentials.username}
@@ -74,12 +74,12 @@ async function sendManualCredentials() {
             </ul>
 
             <div style="text-align: center;">
-                <a href="https://kaptaze.com/restaurant" class="button">
+                <a href="https://kapkazan.com/restaurant" class="button">
                     🚀 Restoran Paneline Git
                 </a>
             </div>
 
-            <p><strong>📱 KapTaze ile neler yapabilirsiniz:</strong></p>
+            <p><strong>📱 kapkazan ile neler yapabilirsiniz:</strong></p>
             <ul>
                 <li>✅ Siparişleri gerçek zamanlı takip edin</li>
                 <li>🍽️ Menü ve fiyatlarınızı güncelleyin</li>
@@ -90,10 +90,10 @@ async function sendManualCredentials() {
 
             <div class="footer">
                 <p>Herhangi bir sorunuz olursa bizimle iletişime geçebilirsiniz:</p>
-                <p>📧 <a href="mailto:info@kaptaze.com">info@kaptaze.com</a></p>
+                <p>📧 <a href="mailto:bilgi@kapkazan.com">bilgi@kapkazan.com</a></p>
                 <p>📱 WhatsApp: +90 XXX XXX XX XX</p>
                 <hr style="margin: 20px 0;">
-                <p>KapTaze - Lezzet Kapınızda! 🚀</p>
+                <p>kapkazan - Lezzet Kapınızda! 🚀</p>
             </div>
         </div>
     </body>
@@ -101,9 +101,9 @@ async function sendManualCredentials() {
     `;
 
     const mailOptions = {
-        from: process.env.SENDGRID_FROM_EMAIL || 'noreply@kaptaze.com',
+        from: process.env.SENDGRID_FROM_EMAIL || 'bilgi@kapkazan.com',
         to: userCredentials.email,
-        subject: '🔑 KapTaze Restoran Paneli - Giriş Bilgileriniz',
+        subject: '🔑 kapkazan Restoran Paneli - Giriş Bilgileriniz',
         html: emailHTML
     };
 

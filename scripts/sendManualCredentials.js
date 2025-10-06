@@ -21,17 +21,17 @@ async function sendCredentialsEmail(email, username, restaurantName, tempPasswor
         const password = tempPassword || generateTempPassword();
 
         const mailOptions = {
-            from: process.env.SENDGRID_FROM_EMAIL || 'noreply@kaptaze.com',
+            from: process.env.SENDGRID_FROM_EMAIL || 'bilgi@kapkazan.com',
             to: email,
-            subject: '🔑 KapTaze Giriş Bilgileriniz - Restaurant Panel Access',
-            replyTo: 'destek@kaptaze.com',
+            subject: '🔑 kapkazan Giriş Bilgileriniz - Restaurant Panel Access',
+            replyTo: 'bilgi@kapkazan.com',
             html: `
                 <!DOCTYPE html>
                 <html>
                 <head>
                     <meta charset="UTF-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>KapTaze Giriş Bilgileri</title>
+                    <title>kapkazan Giriş Bilgileri</title>
                     <style>
                         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
                         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -46,18 +46,18 @@ async function sendCredentialsEmail(email, username, restaurantName, tempPasswor
                 <body>
                     <div class="container">
                         <div class="header">
-                            <h1>🏪 KapTaze Restaurant Panel</h1>
+                            <h1>🏪 kapkazan Restaurant Panel</h1>
                             <p>Giriş bilgileriniz hazır!</p>
                         </div>
                         <div class="content">
                             <h2>Merhaba,</h2>
-                            <p>KapTaze Restaurant platformuna hoş geldiniz! ${restaurantName ? `<strong>${restaurantName}</strong> restoranınız için` : 'Restaurant paneli'} giriş bilgileriniz aşağıda yer almaktadır:</p>
+                            <p>kapkazan Restaurant platformuna hoş geldiniz! ${restaurantName ? `<strong>${restaurantName}</strong> restoranınız için` : 'Restaurant paneli'} giriş bilgileriniz aşağıda yer almaktadır:</p>
 
                             <div class="credentials">
                                 <h3>🔑 Giriş Bilgileri</h3>
                                 <p><strong>Kullanıcı Adı:</strong> <code>${username}</code></p>
                                 <p><strong>Geçici Şifre:</strong> <code>${password}</code></p>
-                                <p><strong>Giriş URL:</strong> <a href="https://kaptaze.com/restaurant-login">https://kaptaze.com/restaurant-login</a></p>
+                                <p><strong>Giriş URL:</strong> <a href="https://kapkazan.com/restaurant-login">https://kapkazan.com/restaurant-login</a></p>
                             </div>
 
                             <div class="warning">
@@ -65,7 +65,7 @@ async function sendCredentialsEmail(email, username, restaurantName, tempPasswor
                                 <p>İlk giriş yaptıktan sonra şifrenizi değiştirmeyi unutmayın. Bu geçici şifredir.</p>
                             </div>
 
-                            <a href="https://kaptaze.com/restaurant-login" class="button">🚀 Restaurant Paneline Giriş Yap</a>
+                            <a href="https://kapkazan.com/restaurant-login" class="button">🚀 Restaurant Paneline Giriş Yap</a>
 
                             <h3>📋 Platform Özellikleri</h3>
                             <ul>
@@ -79,13 +79,13 @@ async function sendCredentialsEmail(email, username, restaurantName, tempPasswor
                             <h3>🆘 Yardım ve Destek</h3>
                             <p>Herhangi bir sorunuz olduğunda bize ulaşabilirsiniz:</p>
                             <ul>
-                                <li>📧 E-posta: <a href="mailto:destek@kaptaze.com">destek@kaptaze.com</a></li>
-                                <li>🌐 Website: <a href="https://kaptaze.com">kaptaze.com</a></li>
+                                <li>📧 E-posta: <a href="mailto:bilgi@kapkazan.com">bilgi@kapkazan.com</a></li>
+                                <li>🌐 Website: <a href="https://kapkazan.com">kaptaze.com</a></li>
                             </ul>
 
                             <div class="footer">
-                                <p>Bu e-posta KapTaze Restaurant Platform tarafından gönderilmiştir.</p>
-                                <p>© 2025 KapTaze - Tüm hakları saklıdır.</p>
+                                <p>Bu e-posta kapkazan Restaurant Platform tarafından gönderilmiştir.</p>
+                                <p>© 2025 kapkazan - Tüm hakları saklıdır.</p>
                             </div>
                         </div>
                     </div>
@@ -143,7 +143,7 @@ sendCredentialsEmail(email, username, restaurantName, tempPassword)
     .then((result) => {
         console.log('\n🎉 Credentials email sent successfully!');
         console.log('📋 Next steps:');
-        console.log('1. User can now login at: https://kaptaze.com/restaurant-login');
+        console.log('1. User can now login at: https://kapkazan.com/restaurant-login');
         console.log('2. They should change their password after first login');
         console.log('3. Check if account status is "active" in the system');
     })
