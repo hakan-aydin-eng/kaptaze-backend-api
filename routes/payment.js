@@ -127,7 +127,7 @@ router.post('/create', authenticate, async (req, res, next) => {
             // Update package quantities
             for (const item of basketItems) {
                 const pkg = restaurantDoc.packages.find(p =>
-                    p._id.toString() === item.packageId || p.packageName === item.packageName
+                    (p._id && p._id.toString()) === item.packageId || p.packageName === item.packageName
                 );
                 if (pkg) {
                     pkg.quantity = Math.max(0, pkg.quantity - item.quantity);
