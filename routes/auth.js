@@ -607,8 +607,8 @@ router.post('/push-token', authenticate, async (req, res, next) => {
 
 // @route   GET /auth/surprise-stories
 // @desc    Get surprise stories for a specific city
-// @access  Private
-router.get('/surprise-stories', authenticate, async (req, res, next) => {
+// @access  Public (changed from Private for mobile app)
+router.get('/surprise-stories', async (req, res, next) => {
     try {
         const { city, limit = 10 } = req.query;
         console.log(`📸 Fetching surprise stories for city: ${city}`);
@@ -653,10 +653,10 @@ router.get('/surprise-stories', authenticate, async (req, res, next) => {
 
 // @route   POST /auth/refresh-token
 // @desc    Refresh JWT token
-// @access  Private
-router.post('/refresh-token', authenticate, async (req, res, next) => {
+// @access  Public (needs to work with expired tokens)
+router.post('/refresh-token', async (req, res, next) => {
     try {
-        const { userId } = req.body;
+        const { userId, oldToken } = req.body;
         console.log('🔄 Refreshing token for user:', userId);
 
         const consumer = await Consumer.findById(userId);
