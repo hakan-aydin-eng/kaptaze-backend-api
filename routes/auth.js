@@ -558,16 +558,17 @@ router.patch('/profile', [
 
 // @route   POST /auth/push-token
 // @desc    Save or update consumer push notification token
-// @access  Private
-router.post('/push-token', authenticate, async (req, res, next) => {
+// @access  Public (changed to allow push notifications without login)
+router.post('/push-token', async (req, res, next) => {
     try {
-        const { userId, consumerEmail, token, platform, deviceInfo } = req.body;
+        const { userId, consumerEmail, token, platform, deviceInfo, deviceId } = req.body;
+        const DeviceToken = require('../models/DeviceToken');
 
         console.log('📱 Push token request:', {
             userId,
             consumerEmail,
             platform,
-            token,
+            token: token ? token.substring(0, 20) + '...' : 'none',
             tokenType: typeof token
         });
 
@@ -581,44 +582,78 @@ router.post('/push-token', authenticate, async (req, res, next) => {
         // Accept both string tokens and Expo push tokens
         const tokenString = typeof token === 'string' ? token : String(token);
 
-        let consumer;
+        let consumer = null;
+        let consumerId = null;
 
-        // Try to find by userId first (handle both string ID and email as userId)
-        if (userId) {
-            // Check if userId is a valid MongoDB ObjectId
-            const mongoose = require('mongoose');
-            if (mongoose.Types.ObjectId.isValid(userId)) {
-                consumer = await Consumer.findById(userId);
-            } else {
-                // userId might be an email, try to find by email
-                consumer = await Consumer.findOne({ email: userId.toLowerCase() });
+        // Try to find consumer if userId or email provided
+        if (userId || consumerEmail) {
+            // Try to find by userId first (handle both string ID and email as userId)
+            if (userId) {
+                const mongoose = require('mongoose');
+                if (mongoose.Types.ObjectId.isValid(userId)) {
+                    consumer = await Consumer.findById(userId);
+                    if (consumer) consumerId = consumer._id;
+                } else {
+                    // userId might be an email, try to find by email
+                    consumer = await Consumer.findOne({ email: userId.toLowerCase() });
+                    if (consumer) consumerId = consumer._id;
+                }
+            }
+
+            // If not found by userId, try consumerEmail
+            if (!consumer && consumerEmail) {
+                consumer = await Consumer.findOne({ email: consumerEmail.toLowerCase() });
+                if (consumer) consumerId = consumer._id;
             }
         }
 
-        // If not found by userId, try consumerEmail
-        if (!consumer && consumerEmail) {
-            consumer = await Consumer.findOne({ email: consumerEmail.toLowerCase() });
+        // Save or update device token (works with or without user)
+        let deviceToken = await DeviceToken.findOne({ token: tokenString });
+
+        if (deviceToken) {
+            // Update existing token
+            deviceToken.consumerId = consumerId; // May be null if no user
+            deviceToken.platform = platform || deviceToken.platform || 'expo';
+            deviceToken.deviceInfo = deviceInfo || deviceToken.deviceInfo;
+            deviceToken.deviceId = deviceId || deviceToken.deviceId;
+            deviceToken.lastUpdated = new Date();
+            deviceToken.isActive = true;
+        } else {
+            // Create new device token
+            deviceToken = new DeviceToken({
+                token: tokenString,
+                consumerId: consumerId, // May be null if no user
+                deviceId: deviceId,
+                platform: platform || 'expo',
+                deviceInfo: deviceInfo || {},
+                isActive: true
+            });
         }
 
-        if (!consumer) {
-            console.log('❌ Consumer not found with:', { userId, consumerEmail });
-            return res.status(404).json({ success: false, error: 'Consumer not found' });
+        await deviceToken.save();
+
+        // If consumer found, also update their pushToken field
+        if (consumer) {
+            consumer.pushToken = {
+                token: tokenString,
+                platform: platform || 'expo',
+                deviceInfo: deviceInfo || {},
+                lastUpdated: new Date()
+            };
+            await consumer.save();
+            console.log(`✅ Push token saved for user: ${consumer.email}`);
+        } else {
+            console.log(`✅ Push token saved for anonymous device`);
         }
-
-        consumer.pushToken = {
-            token: tokenString,
-            platform: platform || 'expo',
-            deviceInfo: deviceInfo || {},
-            lastUpdated: new Date()
-        };
-
-        await consumer.save();
-        console.log(`✅ Push token saved for: ${consumer.email}`);
 
         res.json({
             success: true,
-            message: 'Push token saved successfully',
-            data: { consumerId: consumer._id, platform: consumer.pushToken.platform }
+            message: consumer ? 'Push token saved for user' : 'Push token saved for device',
+            data: {
+                deviceTokenId: deviceToken._id,
+                consumerId: consumerId,
+                platform: deviceToken.platform
+            }
         });
 
     } catch (error) {
