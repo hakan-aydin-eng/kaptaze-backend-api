@@ -214,8 +214,8 @@ router.get('/restaurants', async (req, res, next) => {
         // Sort by rating, order count, then by newest first for new restaurants
         query = query.sort({ 'rating.average': -1, 'stats.totalOrders': -1, 'createdAt': -1 });
 
-        // Select public fields only
-        query = query.select('name description category address location rating stats serviceOptions deliveryInfo images imageUrl profileImage');
+        // Select public fields only (including packages for display)
+        query = query.select('name description category address location rating stats serviceOptions deliveryInfo images imageUrl profileImage packages');
 
         const restaurants = await query.exec();
         const total = await Restaurant.countDocuments(query.getFilter());
