@@ -74,32 +74,6 @@ const consumerSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Restaurant'
     }],
-
-    // In-app notifications history
-    inAppNotifications: [{
-        id: { type: String, required: true },
-        title: { type: String, required: true },
-        message: { type: String, required: true },
-        type: {
-            type: String,
-            enum: ['favorite_restaurant', 'favorite_restaurant_package', 'promotion', 'location', 'order', 'general'],
-            default: 'general'
-        },
-        data: {
-            restaurantId: String,
-            restaurantName: String,
-            packageId: String,
-            packageName: String,
-            packagePrice: String,
-            orderId: String,
-            latitude: String,
-            longitude: String,
-            action: String
-        },
-        read: { type: Boolean, default: false },
-        createdAt: { type: Date, default: Date.now },
-        expiresAt: { type: Date, default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) } // 30 days
-    }],
     
     // Security & Verification
     emailVerified: {
@@ -123,36 +97,30 @@ const consumerSchema = new mongoose.Schema({
         version: String,
         deviceId: String
     },
+    // Push notification token
+    pushToken: {
+        token: String,
+        platform: {
+            type: String,
+            enum: ['ios', 'android', 'expo']
+        },
+        deviceInfo: {
+            brand: String,
+            model: String,
+            osVersion: String
+        },
+        lastUpdated: {
+            type: Date,
+            default: Date.now
+        }
+    },
+
     
     // Notification preferences
     notifications: {
         orders: { type: Boolean, default: true },
         promotions: { type: Boolean, default: true },
         news: { type: Boolean, default: false }
-    },
-
-    // Push notification tokens
-    pushTokens: [{
-        token: { type: String, required: true },
-        platform: { type: String, enum: ['ios', 'android', 'web'], required: true },
-        deviceInfo: {
-            brand: String,
-            model: String,
-            osVersion: String
-        },
-        active: { type: Boolean, default: true },
-        lastUsed: { type: Date, default: Date.now }
-    }],
-
-    // Saved payment card - Iyzico tokenization
-    savedCard: {
-        cardToken: { type: String, trim: true }, // Iyzico card token
-        lastFourDigits: { type: String, trim: true, maxlength: 4 },
-        cardType: { type: String, trim: true }, // Visa, MasterCard, etc.
-        expiryMonth: { type: String, trim: true },
-        expiryYear: { type: String, trim: true },
-        holderName: { type: String, trim: true },
-        savedAt: { type: Date, default: Date.now }
     }
 }, {
     timestamps: true,

@@ -229,10 +229,7 @@ router.get('/me', async (req, res, next) => {
 // @access  Private (Restaurant)
 router.put('/me', [
     body('description').optional().trim().isLength({ max: 500 }),
-    body('socialMedia.website').optional().trim().custom((value) => {
-        if (!value || value === '') return true; // Allow empty values
-        return value.match(/^https?:\/\/.+/); // Simple URL check
-    }).withMessage('Geçerli bir web sitesi URL\'si girin'),
+    body('socialMedia.website').optional().trim().isURL().withMessage('Geçerli bir web sitesi URL\'si girin'),
     body('phone').optional().trim().matches(/^\+?[\d\s-()]+$/),
     body('openingHours').optional().isArray(),
     body('operatingHours.open').optional().matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Açılış saati format: HH:MM'),
@@ -330,13 +327,11 @@ router.get('/orders', async (req, res, next) => {
         const Order = require('../models/Order');
         const mongoose = require('mongoose');
 
-        // Build query - check all possible restaurant ID field patterns
+        // Build query
         let query = {
             $or: [
                 { 'restaurant.id': restaurant._id },
-                { 'restaurant.id': restaurant._id.toString() },
-                { 'restaurantId': restaurant._id },
-                { 'restaurantId': restaurant._id.toString() }
+                { 'restaurant.id': restaurant._id.toString() }
             ]
         };
 
@@ -354,7 +349,7 @@ router.get('/orders', async (req, res, next) => {
             console.log(`📅 Filtering by date: ${date}`);
         }
 
-        console.log('🔍 MongoDB query for restaurant', restaurant._id, ':', JSON.stringify(query, null, 2));
+        console.log('🔍 MongoDB query:', JSON.stringify(query, null, 2));
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
         const orders = await Order.find(query)

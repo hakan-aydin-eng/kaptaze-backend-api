@@ -5,7 +5,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Consumer = require('../models/Consumer');
-const autoMigrationMiddleware = require('./autoMigration');
 
 // Verify JWT Token
 const authenticate = async (req, res, next) => {
@@ -81,17 +80,8 @@ const authenticate = async (req, res, next) => {
                 });
             }
 
-            // Ensure both _id and id are available for compatibility
-            req.user = {
-                ...user.toObject(),
-                id: user._id.toString(),
-                _id: user._id,
-                userType: user.userType // Ensure userType is passed to middleware
-            };
-
-            // Apply auto-migration for authenticated users
-            await autoMigrationMiddleware(req, res, next);
-            return; // autoMigrationMiddleware will call next()
+            req.user = user;
+            next();
         } catch (tokenError) {
             return res.status(401).json({
                 success: false,

@@ -6,7 +6,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const Application = require('../models/Application');
-const Restaurant = require('../models/Restaurant');
 
 const router = express.Router();
 
@@ -215,20 +214,22 @@ router.get('/restaurants', async (req, res, next) => {
         // Sort by rating, order count, then by newest first for new restaurants
         query = query.sort({ 'rating.average': -1, 'stats.totalOrders': -1, 'createdAt': -1 });
 
-        // Select public fields including packages and operating hours for mobile app
-        query = query.select('name description category address location rating stats serviceOptions deliveryInfo images imageUrl profileImage packages socialMedia website phone email operatingHours');
+        // Select public fields only
+        query = query.select('name description category address location rating stats serviceOptions deliveryInfo images imageUrl profileImage');
 
         const restaurants = await query.exec();
         const total = await Restaurant.countDocuments(query.getFilter());
 
         res.json({
             success: true,
-            data: restaurants,
-            pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total,
-                pages: Math.ceil(total / parseInt(limit))
+            data: {
+                restaurants,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    pages: Math.ceil(total / parseInt(limit))
+                }
             }
         });
 
@@ -245,10 +246,10 @@ router.get('/restaurants/:restaurantId', async (req, res, next) => {
         const Restaurant = require('../models/Restaurant');
         const { restaurantId } = req.params;
 
-        const restaurant = await Restaurant.findOne({
-            _id: restaurantId,
-            status: 'active'
-        }).select('name description category address location rating stats serviceOptions deliveryInfo images imageUrl profileImage openingHours operatingHours packages socialMedia website phone email');
+        const restaurant = await Restaurant.findOne({ 
+            _id: restaurantId, 
+            status: 'active' 
+        }).select('name description category address location rating stats serviceOptions deliveryInfo images imageUrl profileImage openingHours packages');
 
         if (!restaurant) {
             return res.status(404).json({
@@ -442,141 +443,6 @@ router.get('/cities', async (req, res, next) => {
 
     } catch (error) {
         next(error);
-    }
-});
-
-// Test endpoint
-router.get('/test-restaurants', async (req, res, next) => {
-    try {
-        const total = await Restaurant.countDocuments();
-        const active = await Restaurant.countDocuments({ status: 'active' });
-        const verified = await Restaurant.countDocuments({ isVerified: true });
-        const activeAndVerified = await Restaurant.countDocuments({ status: 'active', isVerified: true });
-
-        const sampleRestaurants = await Restaurant.find({ status: 'active', isVerified: true })
-            .select('name status isVerified packages')
-            .limit(3);
-
-        res.json({
-            success: true,
-            stats: { total, active, verified, activeAndVerified },
-            sampleRestaurants
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// @route   GET /public/featured-restaurants
-// @desc    Get featured restaurants for homepage (approved restaurants with active packages)
-// @access  Public
-router.get('/featured-restaurants', async (req, res, next) => {
-    try {
-        const { limit = 6, debug } = req.query;
-
-        // Debug mode - show all restaurants
-        if (debug === 'true') {
-            const allRestaurants = await Restaurant.find({}).select('name status isVerified packages').limit(10);
-            return res.json({
-                success: true,
-                debug: true,
-                data: {
-                    restaurants: allRestaurants,
-                    count: allRestaurants.length
-                }
-            });
-        }
-
-        // Find active, verified restaurants (temporarily show all)
-        const restaurants = await Restaurant.find({
-            status: 'active',
-            isVerified: true
-        })
-        .select('name category address.city location rating stats images imageUrl profileImage packages')
-        .sort({
-            'rating.average': -1, // Best rated first
-            'stats.totalOrders': -1, // Most popular first
-            'createdAt': -1 // Newest first
-        })
-        .limit(parseInt(limit));
-
-        // Transform data for frontend
-        const featuredRestaurants = restaurants.map(restaurant => {
-            const activePackages = restaurant.packages?.filter(pkg => pkg.status === 'active' || pkg.status === 'last_package') || [];
-            const discounts = activePackages.map(pkg => {
-                const originalPrice = pkg.originalPrice || pkg.price;
-                const discountPercentage = originalPrice > 0 ?
-                    Math.round(((originalPrice - pkg.price) / originalPrice) * 100) : 0;
-                return discountPercentage;
-            });
-
-            const maxDiscount = discounts.length > 0 ? Math.max(...discounts) : 0;
-            const avgDiscount = discounts.length > 0 ?
-                Math.round(discounts.reduce((a, b) => a + b, 0) / discounts.length) : 0;
-
-            // Category emoji mapping
-            const categoryEmojis = {
-                'İtalyan Mutfağı': '🍕',
-                'Türk Mutfağı': '🥘',
-                'Tatlı & Pasta': '🍰',
-                'Uzak Doğu': '🍜',
-                'Uzakdoğu Mutfağı': '🍜',
-                'Kahve & Atıştırmalık': '☕',
-                'Vegan & Sağlıklı': '🥗',
-                'Vejetaryen': '🥗',
-                'Fast Food': '🍔',
-                'Deniz Ürünleri': '🐟',
-                'Et Yemekleri': '🥩',
-                'Döner & Kebap': '🌯',
-                'Pizza': '🍕',
-                'Burger': '🍔',
-                'Tatlı': '🍰',
-                'Kahve': '☕'
-            };
-
-            return {
-                id: restaurant._id,
-                name: restaurant.name,
-                category: restaurant.category,
-                emoji: categoryEmojis[restaurant.category] || '🍽️',
-                rating: restaurant.rating?.average || 0,
-                city: restaurant.address?.city || 'Bilinmiyor',
-                activePackages: activePackages.length,
-                maxDiscount: maxDiscount,
-                avgDiscount: avgDiscount,
-                image: restaurant.images?.cover || restaurant.imageUrl || restaurant.profileImage,
-                totalOrders: restaurant.stats?.totalOrders || 0
-            };
-        });
-
-        res.json({
-            success: true,
-            data: {
-                restaurants: featuredRestaurants,
-                count: featuredRestaurants.length,
-                lastUpdated: new Date().toISOString()
-            }
-        });
-
-    } catch (error) {
-        console.error('Featured restaurants error:', error);
-        // Return demo data on error for backwards compatibility
-        res.json({
-            success: true,
-            data: {
-                restaurants: [
-                    { id: 'demo1', name: 'Pizza Express', category: 'İtalyan Mutfağı', emoji: '🍕', rating: 4.8, activePackages: 3, maxDiscount: 50, city: 'Antalya' },
-                    { id: 'demo2', name: 'Anadolu Sofrası', category: 'Türk Mutfağı', emoji: '🥘', rating: 4.9, activePackages: 5, maxDiscount: 45, city: 'Antalya' },
-                    { id: 'demo3', name: 'Sweet Dreams', category: 'Tatlı & Pasta', emoji: '🍰', rating: 4.7, activePackages: 8, maxDiscount: 60, city: 'Antalya' },
-                    { id: 'demo4', name: 'Asia Kitchen', category: 'Uzak Doğu', emoji: '🍜', rating: 4.6, activePackages: 4, maxDiscount: 55, city: 'Antalya' },
-                    { id: 'demo5', name: 'Coffee Lab', category: 'Kahve & Atıştırmalık', emoji: '☕', rating: 4.8, activePackages: 6, maxDiscount: 40, city: 'Antalya' },
-                    { id: 'demo6', name: 'Green Garden', category: 'Vegan & Sağlıklı', emoji: '🥗', rating: 4.9, activePackages: 2, maxDiscount: 50, city: 'Antalya' }
-                ],
-                count: 6,
-                lastUpdated: new Date().toISOString(),
-                demo: true
-            }
-        });
     }
 });
 
