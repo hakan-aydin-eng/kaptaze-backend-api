@@ -45,13 +45,44 @@ router.post('/create', authenticate, async (req, res, next) => {
 
         // Get restaurant details - handle both restaurantId and restaurant fields
         const restaurantIdToUse = restaurantId || (typeof restaurant === 'object' ? (restaurant.id || restaurant._id) : restaurant);
-        const restaurantDoc = await Restaurant.findById(restaurantIdToUse);
+
+        console.log('🔍 Searching for restaurant with ID:', restaurantIdToUse);
+
+        // Try to find restaurant
+        let restaurantDoc = null;
+        try {
+            restaurantDoc = await Restaurant.findById(restaurantIdToUse);
+        } catch (err) {
+            console.log('❌ Invalid restaurant ID format:', restaurantIdToUse);
+            // ID format is invalid, list all restaurants for debugging
+            const allRestaurants = await Restaurant.find({}).select('_id name status').limit(10);
+            console.log('📋 Available restaurants:', allRestaurants.map(r => ({
+                id: r._id.toString(),
+                name: r.name,
+                status: r.status
+            })));
+        }
+
         if (!restaurantDoc) {
+            // Try to find by any field to debug
+            const allRestaurants = await Restaurant.find({}).select('_id name status').limit(10);
+            console.log('📋 Available restaurants in DB:', allRestaurants.map(r => ({
+                id: r._id.toString(),
+                name: r.name,
+                status: r.status
+            })));
+
             return res.status(404).json({
                 success: false,
-                error: 'Restaurant not found'
+                error: `Restaurant not found with ID: ${restaurantIdToUse}`,
+                availableRestaurants: allRestaurants.map(r => ({
+                    id: r._id.toString(),
+                    name: r.name
+                }))
             });
         }
+
+        console.log('✅ Restaurant found:', restaurantDoc.name, 'Status:', restaurantDoc.status);
 
         // Create unique order ID
         const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
