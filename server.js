@@ -18,6 +18,7 @@ const publicRoutes = require('./routes/public');
 const adminRoutes = require('./routes/admin');
 const restaurantRoutes = require('./routes/restaurant');
 const orderRoutes = require('./routes/orders');
+const paymentRoutes = require('./routes/payment');
 
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
@@ -142,6 +143,7 @@ app.use('/public', publicRoutes);
 app.use('/admin', adminRoutes);
 app.use('/restaurant', restaurantRoutes);
 app.use('/orders', orderRoutes);
+app.use('/payment', paymentRoutes);
 
 // Welcome Route
 app.get('/', (req, res) => {

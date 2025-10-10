@@ -30,6 +30,7 @@
     "express-rate-limit": "^8.0.1",
     "express-validator": "^7.2.1",
     "helmet": "^8.1.0",
+    "iyzipay": "^2.0.64",
     "jsonwebtoken": "^9.0.2",
     "mongodb-memory-server": "^10.2.0",
     "mongoose": "^8.18.0",
