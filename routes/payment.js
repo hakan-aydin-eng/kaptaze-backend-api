@@ -23,6 +23,7 @@ router.post('/create', authenticate, async (req, res, next) => {
             basketItems,
             totalAmount,
             restaurant,
+            restaurantId,
             cardInfo,
             billingInfo,
             deliveryOption,
@@ -31,6 +32,7 @@ router.post('/create', authenticate, async (req, res, next) => {
 
         const consumerId = req.user.id;
         console.log('💳 Payment request from:', req.user.email);
+        console.log('💳 Restaurant ID:', restaurantId || restaurant);
 
         // Get consumer details
         const consumer = await Consumer.findById(consumerId);
@@ -41,8 +43,9 @@ router.post('/create', authenticate, async (req, res, next) => {
             });
         }
 
-        // Get restaurant details
-        const restaurantDoc = await Restaurant.findById(restaurant.id || restaurant._id);
+        // Get restaurant details - handle both restaurantId and restaurant fields
+        const restaurantIdToUse = restaurantId || (typeof restaurant === 'object' ? (restaurant.id || restaurant._id) : restaurant);
+        const restaurantDoc = await Restaurant.findById(restaurantIdToUse);
         if (!restaurantDoc) {
             return res.status(404).json({
                 success: false,
