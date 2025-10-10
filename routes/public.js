@@ -392,7 +392,7 @@ router.get('/categories', async (req, res, next) => {
         const Restaurant = require('../models/Restaurant');
         
         const categories = await Restaurant.aggregate([
-            { $match: { status: 'active', isVerified: true } },
+            { $match: { status: 'active' } },
             { $group: { _id: '$category', count: { $sum: 1 } } },
             { $sort: { count: -1 } }
         ]);

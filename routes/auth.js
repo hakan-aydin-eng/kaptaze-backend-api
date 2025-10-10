@@ -605,4 +605,95 @@ router.post('/push-token', authenticate, async (req, res, next) => {
     }
 });
 
+// @route   GET /auth/surprise-stories
+// @desc    Get surprise stories for a specific city
+// @access  Private
+router.get('/surprise-stories', authenticate, async (req, res, next) => {
+    try {
+        const { city, limit = 10 } = req.query;
+        console.log(`📸 Fetching surprise stories for city: ${city}`);
+
+        // For now, return mock data until we implement real stories
+        const mockStories = [
+            {
+                id: '1',
+                restaurantName: 'Lezzetli Döner',
+                title: 'Günün Sürprizi',
+                description: 'Özel soslu döner menü',
+                image: 'https://picsum.photos/400/300',
+                discount: 30,
+                expiresIn: '2 saat',
+                city: city || 'Antalya'
+            },
+            {
+                id: '2',
+                restaurantName: 'Pizza Palace',
+                title: 'Akşam İndirimi',
+                description: 'Büyük boy pizzada %40 indirim',
+                image: 'https://picsum.photos/400/301',
+                discount: 40,
+                expiresIn: '4 saat',
+                city: city || 'Antalya'
+            }
+        ];
+
+        res.json({
+            success: true,
+            data: {
+                stories: mockStories.slice(0, parseInt(limit)),
+                total: mockStories.length,
+                city: city || 'Antalya'
+            }
+        });
+    } catch (error) {
+        console.error('❌ Surprise stories error:', error);
+        next(error);
+    }
+});
+
+// @route   POST /auth/refresh-token
+// @desc    Refresh JWT token
+// @access  Private
+router.post('/refresh-token', authenticate, async (req, res, next) => {
+    try {
+        const { userId } = req.body;
+        console.log('🔄 Refreshing token for user:', userId);
+
+        const consumer = await Consumer.findById(userId);
+        if (!consumer) {
+            return res.status(404).json({
+                success: false,
+                error: 'User not found'
+            });
+        }
+
+        // Generate new token
+        const token = jwt.sign(
+            {
+                id: consumer._id,
+                email: consumer.email,
+                type: 'consumer'
+            },
+            process.env.JWT_SECRET || 'fallback-jwt-secret',
+            { expiresIn: '30d' }
+        );
+
+        res.json({
+            success: true,
+            data: {
+                token,
+                user: {
+                    id: consumer._id,
+                    name: consumer.name,
+                    email: consumer.email,
+                    phone: consumer.phone
+                }
+            }
+        });
+    } catch (error) {
+        console.error('❌ Token refresh error:', error);
+        next(error);
+    }
+});
+
 module.exports = router;
