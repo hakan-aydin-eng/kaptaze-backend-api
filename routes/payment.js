@@ -187,7 +187,7 @@ router.post('/create', authenticate, async (req, res, next) => {
                     registerCard: cardInfo.saveCard ? '1' : '0'
                 },
                 buyer: {
-                    id: consumer._id.toString(),
+                    id: consumerId,
                     name: billingInfo.name,
                     surname: billingInfo.surname,
                     gsmNumber: billingInfo.phone || consumer.phone,
