@@ -563,28 +563,50 @@ router.post('/push-token', authenticate, async (req, res, next) => {
     try {
         const { userId, consumerEmail, token, platform, deviceInfo } = req.body;
 
-        console.log('📱 Push token request:', { userId, consumerEmail, platform });
+        console.log('📱 Push token request:', {
+            userId,
+            consumerEmail,
+            platform,
+            token,
+            tokenType: typeof token
+        });
 
-        if (!token || typeof token !== 'string') {
+        if (!token) {
             return res.status(400).json({
                 success: false,
-                error: 'Push token is required and must be a string'
+                error: 'Push token is required'
             });
         }
 
+        // Accept both string tokens and Expo push tokens
+        const tokenString = typeof token === 'string' ? token : String(token);
+
         let consumer;
+
+        // Try to find by userId first (handle both string ID and email as userId)
         if (userId) {
-            consumer = await Consumer.findById(userId);
-        } else if (consumerEmail) {
+            // Check if userId is a valid MongoDB ObjectId
+            const mongoose = require('mongoose');
+            if (mongoose.Types.ObjectId.isValid(userId)) {
+                consumer = await Consumer.findById(userId);
+            } else {
+                // userId might be an email, try to find by email
+                consumer = await Consumer.findOne({ email: userId.toLowerCase() });
+            }
+        }
+
+        // If not found by userId, try consumerEmail
+        if (!consumer && consumerEmail) {
             consumer = await Consumer.findOne({ email: consumerEmail.toLowerCase() });
         }
 
         if (!consumer) {
+            console.log('❌ Consumer not found with:', { userId, consumerEmail });
             return res.status(404).json({ success: false, error: 'Consumer not found' });
         }
 
         consumer.pushToken = {
-            token: token,
+            token: tokenString,
             platform: platform || 'expo',
             deviceInfo: deviceInfo || {},
             lastUpdated: new Date()
