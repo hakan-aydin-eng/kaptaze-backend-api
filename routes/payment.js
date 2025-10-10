@@ -93,8 +93,80 @@ router.post('/create', authenticate, async (req, res, next) => {
         // Create unique order ID
         const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
+        // Default to online payment if not specified
+        const paymentMethodToUse = paymentMethod || 'online';
+
+        // Helper function to create order after payment (defined before use)
+        async function createOrderAfterPayment() {
+            // Generate pickup code
+            const pickupCode = Math.random().toString(36).substr(2, 6).toUpperCase();
+
+            // Create order
+            const order = new Order({
+                consumerId,
+                restaurantId: restaurantDoc._id,
+                packages: basketItems.map(item => ({
+                    packageId: item.packageId,
+                    packageName: item.packageName,
+                    quantity: item.quantity,
+                    price: item.discountedPrice || item.price,
+                    totalPrice: (item.discountedPrice || item.price) * item.quantity
+                })),
+                totalAmount,
+                paymentMethod: paymentMethodToUse,
+                paymentStatus: paymentMethodToUse === 'cash' ? 'pending' : 'paid',
+                status: 'pending',
+                pickupCode,
+                orderCode: orderId,
+                deliveryOption: deliveryOption || 'pickup',
+                notes: req.body.notes || ''
+            });
+
+            await order.save();
+
+            // Update package quantities
+            for (const item of basketItems) {
+                const pkg = restaurantDoc.packages.find(p =>
+                    p._id.toString() === item.packageId || p.packageName === item.packageName
+                );
+                if (pkg) {
+                    pkg.quantity = Math.max(0, pkg.quantity - item.quantity);
+                    if (pkg.quantity === 0) {
+                        pkg.status = 'inactive';
+                    }
+                }
+            }
+            await restaurantDoc.save();
+
+            // Send Socket.IO notification if available
+            const io = req.app.get('io');
+            if (io) {
+                io.to(`restaurant-${restaurantDoc._id}`).emit('new-order', {
+                    orderId: order._id,
+                    orderCode: orderId,
+                    customerName: consumer.name,
+                    totalAmount,
+                    paymentMethod: paymentMethodToUse,
+                    items: basketItems
+                });
+            }
+
+            console.log('✅ Order created successfully:', order._id);
+
+            return res.json({
+                success: true,
+                data: {
+                    orderId: order._id,
+                    orderCode: orderId,
+                    pickupCode,
+                    status: order.status,
+                    message: 'Siparişiniz başarıyla oluşturuldu!'
+                }
+            });
+        }
+
         // For now, simulate successful payment (remove when Iyzico integration is ready)
-        if (paymentMethod === 'online') {
+        if (paymentMethodToUse === 'online') {
             // Prepare Iyzico payment request
             const paymentRequest = {
                 locale: Iyzipay.LOCALE.TR,
@@ -145,9 +217,9 @@ router.post('/create', authenticate, async (req, res, next) => {
                     id: `ITEM${index + 1}`,
                     name: item.packageName,
                     category1: 'Food',
-                    category2: restaurant.category,
+                    category2: restaurantDoc.category || 'Restaurant',
                     itemType: Iyzipay.BASKET_ITEM_TYPE.PHYSICAL,
-                    price: (item.discountedPrice * item.quantity).toString()
+                    price: ((item.discountedPrice || item.price) * item.quantity).toString()
                 }))
             };
 
@@ -173,78 +245,9 @@ router.post('/create', authenticate, async (req, res, next) => {
             // TEMPORARY: Simulate successful payment
             await createOrderAfterPayment();
 
-        } else if (paymentMethod === 'cash') {
+        } else if (paymentMethodToUse === 'cash') {
             // Cash on delivery - create order directly
             await createOrderAfterPayment();
-        }
-
-        // Helper function to create order after payment
-        async function createOrderAfterPayment() {
-            // Generate pickup code
-            const pickupCode = Math.random().toString(36).substr(2, 6).toUpperCase();
-
-            // Create order
-            const order = new Order({
-                consumerId,
-                restaurantId: restaurantDoc._id,
-                packages: basketItems.map(item => ({
-                    packageId: item.packageId,
-                    packageName: item.packageName,
-                    quantity: item.quantity,
-                    price: item.discountedPrice,
-                    totalPrice: item.discountedPrice * item.quantity
-                })),
-                totalAmount,
-                paymentMethod: paymentMethod || 'online',
-                paymentStatus: paymentMethod === 'cash' ? 'pending' : 'paid',
-                status: 'pending',
-                pickupCode,
-                orderCode: orderId,
-                deliveryOption: deliveryOption || 'pickup',
-                notes: req.body.notes || ''
-            });
-
-            await order.save();
-
-            // Update package quantities
-            for (const item of basketItems) {
-                const pkg = restaurantDoc.packages.find(p =>
-                    p._id.toString() === item.packageId || p.packageName === item.packageName
-                );
-                if (pkg) {
-                    pkg.quantity = Math.max(0, pkg.quantity - item.quantity);
-                    if (pkg.quantity === 0) {
-                        pkg.status = 'inactive';
-                    }
-                }
-            }
-            await restaurantDoc.save();
-
-            // Send Socket.IO notification if available
-            const io = req.app.get('io');
-            if (io) {
-                io.to(`restaurant-${restaurantDoc._id}`).emit('new-order', {
-                    orderId: order._id,
-                    orderCode: orderId,
-                    customerName: consumer.name,
-                    totalAmount,
-                    paymentMethod,
-                    items: basketItems
-                });
-            }
-
-            console.log('✅ Order created successfully:', order._id);
-
-            res.json({
-                success: true,
-                data: {
-                    orderId: order._id,
-                    orderCode: orderId,
-                    pickupCode,
-                    status: order.status,
-                    message: 'Siparişiniz başarıyla oluşturuldu!'
-                }
-            });
         }
 
     } catch (error) {
