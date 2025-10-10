@@ -19,6 +19,8 @@ const iyzico = new Iyzipay({
 // @access  Private
 router.post('/create', authenticate, async (req, res, next) => {
     try {
+        console.log('📋 Full request body:', JSON.stringify(req.body));
+
         const {
             basketItems,
             totalAmount,
@@ -32,7 +34,11 @@ router.post('/create', authenticate, async (req, res, next) => {
 
         const consumerId = req.user.id;
         console.log('💳 Payment request from:', req.user.email);
-        console.log('💳 Restaurant ID:', restaurantId || restaurant);
+        console.log('💳 Request body restaurant fields:', {
+            restaurant,
+            restaurantId,
+            bodyKeys: Object.keys(req.body)
+        });
 
         // Get consumer details
         const consumer = await Consumer.findById(consumerId);
