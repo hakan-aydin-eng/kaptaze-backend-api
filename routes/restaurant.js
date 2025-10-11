@@ -392,15 +392,6 @@ router.get('/orders', async (req, res, next) => {
                 }
             }
         });
-                pagination: {
-                    page: parseInt(page),
-                    limit: parseInt(limit),
-                    total: total,
-                    pages: Math.ceil(total / parseInt(limit))
-                }
-            }
-        });
-
     } catch (error) {
         console.error('Get restaurant orders error:', error);
         next(error);
