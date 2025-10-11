@@ -379,6 +379,17 @@ router.get('/orders', async (req, res, next) => {
         }));
 
         console.log(`📤 Sending ${transformedOrders.length} orders to restaurant panel`);
+        
+        // 🐛 DEBUG: Log first order structure
+        if (transformedOrders.length > 0) {
+            console.log('🔍 First order structure:');
+            console.log('  - _id:', transformedOrders[0]._id);
+            console.log('  - pricing:', transformedOrders[0].pricing);
+            console.log('  - totalPrice:', transformedOrders[0].totalPrice);
+            console.log('  - items:', transformedOrders[0].items ? 'exists' : 'missing');
+            console.log('  - packages:', transformedOrders[0].packages ? 'exists' : 'missing');
+            console.log('  - pickupCode:', transformedOrders[0].pickupCode);
+        }
 
         res.json({
             success: true,
