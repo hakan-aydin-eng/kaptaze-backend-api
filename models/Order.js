@@ -33,7 +33,8 @@ const orderSchema = new mongoose.Schema({
         },
         phone: {
             type: String,
-            required: true
+            required: false,
+            default: ''
         }
     },
 
