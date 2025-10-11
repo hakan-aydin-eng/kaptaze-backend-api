@@ -109,27 +109,72 @@ router.post('/create', authenticate, async (req, res, next) => {
 
         // Helper function to create order after payment (defined before use)
         async function createOrderAfterPayment() {
-            // Generate pickup code
-            const pickupCode = Math.random().toString(36).substr(2, 6).toUpperCase();
-
-            // Create order
+            // Create order matching Order schema structure
             const order = new Order({
-                consumerId,
-                restaurantId: restaurantDoc._id,
-                packages: basketItems.map(item => ({
+                orderId: orderId,
+
+                // Customer information (required by schema)
+                customer: {
+                    id: consumerId,
+                    name: consumer.name || (billingInfo.name + ' ' + billingInfo.surname),
+                    email: consumer.email || billingInfo.email,
+                    phone: consumer.phone || billingInfo.phone || ''
+                },
+
+                // Restaurant information (required by schema)
+                restaurant: {
+                    id: restaurantDoc._id,
+                    name: restaurantDoc.name,
+                    phone: restaurantDoc.phone || restaurantDoc.contactPhone || '',
+                    address: {
+                        street: (restaurantDoc.address && restaurantDoc.address.street) || restaurantDoc.address || '',
+                        district: (restaurantDoc.address && restaurantDoc.address.district) || '',
+                        city: (restaurantDoc.address && restaurantDoc.address.city) || restaurantDoc.city || ''
+                    }
+                },
+
+                // Order items (not 'packages', schema expects 'items')
+                items: basketItems.map(item => ({
                     packageId: item.packageId,
-                    packageName: item.packageName,
-                    quantity: item.quantity,
+                    name: item.packageName,
+                    description: item.description || '',
                     price: item.discountedPrice || item.price,
+                    quantity: item.quantity,
                     totalPrice: (item.discountedPrice || item.price) * item.quantity
                 })),
-                totalAmount: finalAmount,
-                paymentMethod: paymentMethodToUse,
-                paymentStatus: paymentMethodToUse === 'cash' ? 'pending' : 'paid',
+
+                // Pricing information (required by schema)
+                pricing: {
+                    subtotal: finalAmount,
+                    deliveryFee: 0,
+                    tax: 0,
+                    discount: 0,
+                    total: finalAmount
+                },
+
+                // Delivery information
+                delivery: {
+                    type: (deliveryOption === 'delivery') ? 'delivery' : 'pickup',
+                    address: (deliveryOption === 'delivery') ? {
+                        street: billingInfo.address || '',
+                        district: '',
+                        city: billingInfo.city || '',
+                        notes: req.body.notes || ''
+                    } : undefined
+                },
+
+                // Payment information
+                payment: {
+                    method: (paymentMethodToUse === 'cash') ? 'cash' : 'credit_card',
+                    status: (paymentMethodToUse === 'cash') ? 'pending' : 'completed',
+                    transactionId: orderId,
+                    paidAt: (paymentMethodToUse !== 'cash') ? new Date() : undefined
+                },
+
+                // Order status
                 status: 'pending',
-                pickupCode,
-                orderCode: orderId,
-                deliveryOption: deliveryOption || 'pickup',
+
+                // Additional notes
                 notes: req.body.notes || ''
             });
 
@@ -137,8 +182,8 @@ router.post('/create', authenticate, async (req, res, next) => {
 
             // Update package quantities
             for (const item of basketItems) {
-                const pkg = restaurantDoc.packages.find(p =>
-                    (p._id && p._id.toString()) === item.packageId || p.packageName === item.packageName
+                const pkg = restaurantDoc.packages && restaurantDoc.packages.find(p =>
+                    (p._id && p._id.toString() === item.packageId) || p.packageName === item.packageName
                 );
                 if (pkg) {
                     pkg.quantity = Math.max(0, pkg.quantity - item.quantity);
@@ -169,7 +214,6 @@ router.post('/create', authenticate, async (req, res, next) => {
                 data: {
                     orderId: order._id,
                     orderCode: orderId,
-                    pickupCode,
                     status: order.status,
                     message: 'Siparişiniz başarıyla oluşturuldu!'
                 }
