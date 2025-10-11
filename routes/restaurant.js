@@ -369,10 +369,29 @@ router.get('/orders', async (req, res, next) => {
 
         console.log(`📦 Found ${orders.length} orders for restaurant ${restaurant.name}`);
 
+        // 🐛 DEBUG: Transform orders for backward compatibility
+        const transformedOrders = orders.map(order => ({
+            ...order.toObject(),
+            // ✅ Backward compatibility fields for restaurant panel
+            totalPrice: order.pricing?.total || 0,
+            packages: order.items || [],
+            pickupCode: order.orderId
+        }));
+
+        console.log(`📤 Sending ${transformedOrders.length} orders to restaurant panel`);
+
         res.json({
             success: true,
             data: {
-                orders: orders,
+                orders: transformedOrders,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total: total,
+                    pages: Math.ceil(total / parseInt(limit))
+                }
+            }
+        });
                 pagination: {
                     page: parseInt(page),
                     limit: parseInt(limit),

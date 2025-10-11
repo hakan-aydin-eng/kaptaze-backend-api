@@ -194,6 +194,18 @@ router.post('/create', authenticate, async (req, res, next) => {
             }
             await restaurantDoc.save();
 
+            // 🐛 DEBUG: Order created - log full details
+            console.log('\n=== 🎯 ORDER CREATED DEBUG ===');
+            console.log('📦 Order ID:', order._id);
+            console.log('📋 Order Code:', orderId);
+            console.log('👤 Customer:', order.customer);
+            console.log('🏪 Restaurant:', order.restaurant);
+            console.log('💰 Pricing:', order.pricing);
+            console.log('📦 Items:', order.items);
+            console.log('📍 Payment Method:', order.payment.method);
+            console.log('📊 Order Status:', order.status);
+            console.log('=== END DEBUG ===\n');
+
             // Send Socket.IO notification if available
             const io = req.app.get('io');
             if (io) {
@@ -219,15 +231,25 @@ router.post('/create', authenticate, async (req, res, next) => {
 
             console.log('✅ Order created successfully:', order._id);
 
+            // 🐛 DEBUG: Preparing response
+            const responseData = {
+                orderId: order._id.toString(),
+                orderCode: orderId,
+                status: order.status,
+                pickupCode: orderId, // ✅ For restaurant panel compatibility
+                message: 'Siparişiniz başarıyla oluşturuldu!'
+            };
+            console.log('📤 Sending response to client:', responseData);
+
             return res.json({
                 success: true,
-                data: {
-                    orderId: order._id,
-                    orderCode: orderId,
-                    status: order.status,
-                    message: 'Siparişiniz başarıyla oluşturuldu!'
-                }
+                data: responseData
             });
+
+            /* OLD CODE:
+            return res.json({
+                success: true,
+            */
         }
 
         // For now, simulate successful payment (remove when Iyzico integration is ready)
