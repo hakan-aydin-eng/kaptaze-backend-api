@@ -22,7 +22,6 @@ router.post('/', async (req, res) => {
             customer,
             restaurantId,
             items,
-            totalAmount,
             paymentMethod,
             notes
         } = req.body;
@@ -245,4 +244,37 @@ router.get('/', async (req, res) => {
     }
 });
 
+module.exports = router;
+
+// Get user orders - for mobile app
+// @route   GET /orders/user/:userId
+// @desc    Get all orders for a specific user
+// @access  Public (but should verify userId matches auth token in production)
+router.get('/user/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        console.log('📱 Fetching orders for user:', userId);
+
+        // Find all orders for this user
+        const orders = await Order.find({ 'customer.id': userId })
+            .sort({ createdAt: -1 })
+            .limit(100);
+
+        console.log(`✅ Found ${orders.length} orders for user ${userId}`);
+
+        res.json({
+            success: true,
+            count: orders.length,
+            data: orders
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching user orders:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch user orders',
+            message: error.message
+        });
+    }
+});
 module.exports = router;
