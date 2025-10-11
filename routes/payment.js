@@ -310,27 +310,37 @@ router.post('/create', authenticate, async (req, res, next) => {
                 }))
             };
 
-            console.log('💳 Sending payment to Iyzico...');
+            console.log('💳 Sending 3D Secure Initialize request to Iyzico...');
 
-            // For testing, simulate success
-            // In production, uncomment the actual Iyzico call below
-            /*
-            iyzico.payment.create(paymentRequest, (err, result) => {
-                if (err || result.status !== 'success') {
-                    console.error('❌ Payment failed:', err || result);
+            // Use 3D Secure Initialize for SMS verification
+            iyzico.threedsInitialize.create(paymentRequest, async (err, result) => {
+                if (err) {
+                    console.error('❌ 3D Secure Initialize error:', err);
                     return res.status(400).json({
                         success: false,
-                        error: err?.message || result.errorMessage || 'Payment failed'
+                        error: err.message || '3D Secure başlatılamadı'
                     });
                 }
 
-                // Payment successful, create order
-                createOrderAfterPayment();
-            });
-            */
+                console.log('🔒 3D Secure Initialize result status:', result.status);
 
-            // TEMPORARY: Simulate successful payment
-            return await createOrderAfterPayment();
+                if (result.status === 'success') {
+                    // Return 3D Secure HTML content for SMS verification
+                    return res.json({
+                        success: true,
+                        status: 'waiting_3d_secure',
+                        threeDSHtmlContent: result.threeDSHtmlContent,
+                        paymentId: result.paymentId,
+                        conversationId: orderId
+                    });
+                } else {
+                    console.error('❌ 3D Secure failed:', result);
+                    return res.status(400).json({
+                        success: false,
+                        error: result.errorMessage || '3D Secure başarısız'
+                    });
+                }
+            });
 
         } else if (paymentMethodToUse === 'cash') {
             // Cash on delivery - create order directly
