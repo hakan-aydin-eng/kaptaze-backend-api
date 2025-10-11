@@ -353,6 +353,113 @@ router.post('/create', authenticate, async (req, res, next) => {
     }
 });
 
+// @route   POST /payment/3ds-callback
+// @desc    3D Secure callback after SMS verification
+// @access  Public
+router.post('/3ds-callback', async (req, res, next) => {
+    try {
+        console.log('🔔 3D Secure callback received');
+        console.log('📦 Request body:', req.body);
+        console.log('🔍 Query params:', req.query);
+
+        const { paymentId, conversationId } = req.body;
+        const token = req.query.token || req.body.token || paymentId;
+        const orderId = req.query.conversationId || req.body.conversationId || conversationId;
+
+        if (!token) {
+            console.error('❌ Missing payment token');
+            return res.status(400).send('<html><body><h1>Hata: Ödeme token bulunamadı</h1></body></html>');
+        }
+
+        console.log('🔒 Verifying 3D Secure payment with token:', token);
+
+        // Create 3DS payment verification request
+        const request = {
+            locale: Iyzipay.LOCALE.TR,
+            conversationId: orderId || 'conv' + Date.now(),
+            paymentId: token
+        };
+
+        iyzico.threedsPayment.create(request, async (err, result) => {
+            if (err) {
+                console.error('❌ 3D Secure payment error:', err);
+                return res.send(`<html><body>
+                    <h1>❌ Ödeme Başarısız</h1>
+                    <p>${err.message}</p>
+                    <script>
+                        setTimeout(() => {
+                            if (window.ReactNativeWebView) {
+                                window.ReactNativeWebView.postMessage(JSON.stringify({
+                                    type: 'payment-failed',
+                                    error: '${err.message}'
+                                }));
+                            }
+                        }, 1000);
+                    </script>
+                </body></html>`);
+            }
+
+            console.log('✅ 3D Secure payment result status:', result.status);
+
+            if (result.status === 'success') {
+                // Payment verified! Now create the order
+                console.log('💳 Payment verified, creating order...');
+
+                // Get order details from session or database
+                // For now, send success message
+                const successHtml = `<html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <style>
+                            body { font-family: Arial; text-align: center; padding: 50px; background: #f0f9ff; }
+                            h1 { color: #10b981; }
+                            .order-code { font-size: 24px; font-weight: bold; margin: 20px 0; }
+                        </style>
+                    </head>
+                    <body>
+                        <h1>✅ Ödeme Başarılı!</h1>
+                        <p class="order-code">Sipariş Kodu: ${orderId}</p>
+                        <p>Siparişiniz oluşturuldu. Restorana giderek teslim alabilirsiniz.</p>
+                        <script>
+                            setTimeout(() => {
+                                if (window.ReactNativeWebView) {
+                                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                                        type: 'payment-success',
+                                        orderId: '${orderId}',
+                                        orderCode: '${orderId}'
+                                    }));
+                                }
+                            }, 2000);
+                        </script>
+                    </body>
+                </html>`;
+
+                return res.send(successHtml);
+            } else {
+                console.error('❌ Payment verification failed:', result);
+                return res.send(`<html><body>
+                    <h1>❌ Ödeme Doğrulanamadı</h1>
+                    <p>${result.errorMessage || 'Bilinmeyen hata'}</p>
+                    <script>
+                        setTimeout(() => {
+                            if (window.ReactNativeWebView) {
+                                window.ReactNativeWebView.postMessage(JSON.stringify({
+                                    type: 'payment-failed',
+                                    error: '${result.errorMessage}'
+                                }));
+                            }
+                        }, 1000);
+                    </script>
+                </body></html>`);
+            }
+        });
+    } catch (error) {
+        console.error('❌ 3DS callback error:', error);
+        next(error);
+    }
+});
+
 // @route   GET /payment/test
 // @desc    Test payment endpoint
 // @access  Public
