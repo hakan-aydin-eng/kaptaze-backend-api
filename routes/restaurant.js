@@ -327,13 +327,21 @@ router.get('/orders', async (req, res, next) => {
         const Order = require('../models/Order');
         const mongoose = require('mongoose');
 
-        // Build query
+        // Build query - Prioritize String comparison (new orders use String)
+        const restaurantIdString = restaurant._id.toString();
         let query = {
             $or: [
-                { 'restaurant.id': restaurant._id },
-                { 'restaurant.id': restaurant._id.toString() }
+                { 'restaurant.id': restaurantIdString }, // String comparison (new format)
+                { 'restaurant.id': restaurant._id }      // ObjectId comparison (legacy support)
             ]
         };
+
+
+
+
+
+
+
 
         if (status) {
             query.status = status;

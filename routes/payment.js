@@ -115,7 +115,7 @@ router.post('/create', authenticate, async (req, res, next) => {
 
                 // Customer information (required by schema)
                 customer: {
-                    id: consumerId,
+                    id: consumerId.toString(), // ✅ String for consistent queries
                     name: consumer.name || (billingInfo.name + ' ' + billingInfo.surname),
                     email: consumer.email || billingInfo.email,
                     phone: consumer.phone || billingInfo.phone || ''
@@ -123,7 +123,7 @@ router.post('/create', authenticate, async (req, res, next) => {
 
                 // Restaurant information (required by schema)
                 restaurant: {
-                    id: restaurantDoc._id,
+                    id: restaurantDoc._id.toString(), // ✅ String for consistent queries
                     name: restaurantDoc.name,
                     phone: restaurantDoc.phone || restaurantDoc.contactPhone || '',
                     address: {
