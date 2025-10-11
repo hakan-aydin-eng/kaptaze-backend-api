@@ -197,14 +197,24 @@ router.post('/create', authenticate, async (req, res, next) => {
             // Send Socket.IO notification if available
             const io = req.app.get('io');
             if (io) {
-                io.to(`restaurant-${restaurantDoc._id}`).emit('new-order', {
+                const roomName = `restaurant-${restaurantDoc._id}`;
+                const notification = {
                     orderId: order._id,
                     orderCode: orderId,
                     customerName: consumer.name,
                     totalAmount: finalAmount,
                     paymentMethod: paymentMethodToUse,
                     items: basketItems
-                });
+                };
+
+                console.log(`🔔 Sending Socket.IO notification to room: ${roomName}`);
+                console.log(`📦 Notification data:`, notification);
+
+                io.to(roomName).emit('new-order', notification);
+
+                console.log(`✅ Socket.IO notification sent to ${restaurantDoc.name}`);
+            } else {
+                console.warn('⚠️ Socket.IO not available - notification not sent');
             }
 
             console.log('✅ Order created successfully:', order._id);
@@ -298,11 +308,11 @@ router.post('/create', authenticate, async (req, res, next) => {
             */
 
             // TEMPORARY: Simulate successful payment
-            await createOrderAfterPayment();
+            return await createOrderAfterPayment();
 
         } else if (paymentMethodToUse === 'cash') {
             // Cash on delivery - create order directly
-            await createOrderAfterPayment();
+            return await createOrderAfterPayment();
         }
 
     } catch (error) {
