@@ -24,6 +24,7 @@ router.post('/create', authenticate, async (req, res, next) => {
         const {
             basketItems,
             totalAmount,
+            amount,
             restaurant,
             restaurantId,
             cardInfo,
@@ -31,6 +32,16 @@ router.post('/create', authenticate, async (req, res, next) => {
             deliveryOption,
             paymentMethod
         } = req.body;
+
+        // Handle both totalAmount and amount (mobile app sends 'amount')
+        const finalAmount = totalAmount || amount;
+
+        if (!finalAmount) {
+            return res.status(400).json({
+                success: false,
+                error: 'Amount is required (totalAmount or amount)'
+            });
+        }
 
         const consumerId = req.user.id;
         console.log('💳 Payment request from:', req.user.email);
@@ -112,7 +123,7 @@ router.post('/create', authenticate, async (req, res, next) => {
                     price: item.discountedPrice || item.price,
                     totalPrice: (item.discountedPrice || item.price) * item.quantity
                 })),
-                totalAmount,
+                totalAmount: finalAmount,
                 paymentMethod: paymentMethodToUse,
                 paymentStatus: paymentMethodToUse === 'cash' ? 'pending' : 'paid',
                 status: 'pending',
@@ -145,7 +156,7 @@ router.post('/create', authenticate, async (req, res, next) => {
                     orderId: order._id,
                     orderCode: orderId,
                     customerName: consumer.name,
-                    totalAmount,
+                    totalAmount: finalAmount,
                     paymentMethod: paymentMethodToUse,
                     items: basketItems
                 });
@@ -171,8 +182,8 @@ router.post('/create', authenticate, async (req, res, next) => {
             const paymentRequest = {
                 locale: Iyzipay.LOCALE.TR,
                 conversationId: orderId,
-                price: totalAmount.toString(),
-                paidPrice: totalAmount.toString(),
+                price: finalAmount.toString(),
+                paidPrice: finalAmount.toString(),
                 currency: Iyzipay.CURRENCY.TRY,
                 installment: '1',
                 basketId: orderId,
