@@ -370,13 +370,22 @@ router.get('/orders', async (req, res, next) => {
         console.log(`📦 Found ${orders.length} orders for restaurant ${restaurant.name}`);
 
         // 🐛 DEBUG: Transform orders for backward compatibility
-        const transformedOrders = orders.map(order => ({
-            ...order.toObject(),
-            // ✅ Backward compatibility fields for restaurant panel
-            totalPrice: order.pricing?.total || 0,
-            packages: order.items || [],
-            pickupCode: order.orderId
-        }));
+        const transformedOrders = orders.map(order => {
+            const orderObj = order.toObject();
+            // IMPORTANT: Override fields AFTER spread to ensure they take precedence
+            return {
+                ...orderObj,
+                // ✅ Backward compatibility fields for restaurant panel (MUST override)
+                totalPrice: orderObj.pricing?.total || orderObj.totalPrice || 0,
+                packages: orderObj.items || orderObj.packages || [],
+                pickupCode: orderObj.orderId || orderObj.pickupCode || 'N/A',
+                // Ensure these fields exist for panel
+                customer: orderObj.customer || {},
+                restaurant: orderObj.restaurant || {},
+                status: orderObj.status || 'pending',
+                createdAt: orderObj.createdAt || new Date()
+            };
+        });
 
         console.log(`📤 Sending ${transformedOrders.length} orders to restaurant panel`);
         
