@@ -17,7 +17,10 @@ function transformOrderToUnified(order) {
         restaurant: orderObj.restaurant || {},
         
         // Customer  
-        customer: orderObj.customer || {},
+        customer: {
+            ...orderObj.customer,
+            phone: orderObj.customer?.phone || ''  // Ensure phone is never undefined
+        },
         
         // PACKAGE - Singular for mobile
         package: {
@@ -43,12 +46,11 @@ function transformOrderToUnified(order) {
         totalPrice: Number(totalPrice) || 0,
         originalPrice: Number(originalPrice) * (firstItem.quantity || 1),
         savings: (Number(originalPrice) * (firstItem.quantity || 1)) - Number(totalPrice),
-        
         // Status & Dates
         status: orderObj.status || 'pending',
-        orderDate: orderObj.orderDate || orderObj.createdAt,
+        orderDate: orderObj.orderDate || orderObj.createdAt?.toISOString ? orderObj.createdAt.toISOString() : orderObj.createdAt || new Date().toISOString(),
         pickupTime: orderObj.pickupTime || '18:00-21:00',
-        createdAt: orderObj.createdAt,
+        createdAt: orderObj.createdAt?.toISOString ? orderObj.createdAt.toISOString() : orderObj.createdAt || new Date().toISOString(),
         
         // Payment
         paymentMethod: orderObj.payment?.method || orderObj.paymentMethod || 'unknown',
