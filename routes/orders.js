@@ -255,8 +255,13 @@ router.get('/user/:userId', async (req, res) => {
         const { userId } = req.params;
         console.log('📱 Fetching orders for user:', userId);
 
-        // Find all orders for this user
-        const orders = await Order.find({ 'customer.id': userId })
+        // Find all orders for this user - support both String and ObjectId formats
+        const orders = await Order.find({
+            $or: [
+                { 'customer.id': userId },  // New orders (String)
+                { 'customer.id': require('mongoose').Types.ObjectId(userId) }  // Old orders (ObjectId)
+            ]
+        })
             .sort({ createdAt: -1 })
             .limit(100);
 
