@@ -59,7 +59,7 @@ const orderSchema = new mongoose.Schema({
         }
     },
 
-    // Order Items (Packages)
+    // Order Items (Unified Format)
     items: [{
         packageId: {
             type: String,
@@ -70,6 +70,10 @@ const orderSchema = new mongoose.Schema({
             required: true
         },
         description: String,
+        originalPrice: {
+            type: Number,
+            default: 0
+        },
         price: {
             type: Number,
             required: true
@@ -79,17 +83,27 @@ const orderSchema = new mongoose.Schema({
             required: true,
             min: 1
         },
-        totalPrice: {
+        total: {
             type: Number,
             required: true
         }
     }],
 
-    // Pricing
+    // Unified Pricing - Single totalPrice field
+    totalPrice: {
+        type: Number,
+        required: true
+    },
+    savings: {
+        type: Number,
+        default: 0
+    },
+
+    // Legacy pricing object (optional, for backward compatibility)
     pricing: {
         subtotal: {
             type: Number,
-            required: true
+            required: false
         },
         deliveryFee: {
             type: Number,
@@ -105,7 +119,7 @@ const orderSchema = new mongoose.Schema({
         },
         total: {
             type: Number,
-            required: true
+            required: false
         }
     },
 
@@ -148,17 +162,35 @@ const orderSchema = new mongoose.Schema({
         default: 'pending'
     },
 
-    // Payment Information
+    // Unified Payment Fields
+    paymentMethod: {
+        type: String,
+        enum: ['cash', 'card', 'online', 'mobile_payment'],
+        default: 'cash'
+    },
+    paymentStatus: {
+        type: String,
+        enum: ['pending', 'paid', 'completed', 'failed', 'refunded'],
+        default: 'pending'
+    },
+    paymentDetails: {
+        transactionId: String,
+        conversationId: String,
+        paymentId: String,
+        paidAt: Date
+    },
+
+    // Legacy payment object (optional, for backward compatibility)
     payment: {
         method: {
             type: String,
-            enum: ['cash', 'credit_card', 'mobile_payment'],
-            default: 'cash'
+            enum: ['cash', 'credit_card', 'card', 'online', 'mobile_payment'],
+            required: false
         },
         status: {
             type: String,
-            enum: ['pending', 'completed', 'failed', 'refunded'],
-            default: 'pending'
+            enum: ['pending', 'completed', 'paid', 'failed', 'refunded'],
+            required: false
         },
         transactionId: String,
         paidAt: Date
@@ -252,7 +284,7 @@ orderSchema.virtual('summary').get(function() {
         orderId: this.orderId,
         restaurant: this.restaurant.name,
         itemCount: this.items.length,
-        total: this.pricing.total,
+        total: this.totalPrice,
         status: this.status,
         orderDate: this.orderDate
     };
