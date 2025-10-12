@@ -308,6 +308,53 @@ router.post('/create', authenticate, async (req, res, next) => {
                 }))
             };
 
+            // ✅ PRE-CREATE ORDER (will be finalized after 3DS success)
+            const orderBefore3DS = new Order({
+                orderId: orderId,
+                customer: {
+                    id: consumerId.toString(),
+                    name: consumer.name || (billingInfo.name + ' ' + billingInfo.surname),
+                    email: consumer.email || billingInfo.email,
+                    phone: consumer.phone || billingInfo.phone || ''
+                },
+                restaurant: {
+                    id: restaurantDoc._id.toString(),
+                    name: restaurantDoc.name,
+                    phone: restaurantDoc.phone || restaurantDoc.contactPhone || '',
+                    address: {
+                        street: (restaurantDoc.address && restaurantDoc.address.street) || restaurantDoc.address || '',
+                        district: (restaurantDoc.address && restaurantDoc.address.district) || '',
+                        city: (restaurantDoc.address && restaurantDoc.address.city) || restaurantDoc.city || ''
+                    }
+                },
+                items: basketItems.map(item => ({
+                    packageId: item.packageId,
+                    name: item.packageName,
+                    description: item.description || '',
+                    originalPrice: item.price,
+                    price: item.discountedPrice || item.price,
+                    quantity: item.quantity,
+                    total: (item.discountedPrice || item.price) * item.quantity
+                })),
+                totalPrice: finalAmount,
+                delivery: {
+                    type: (deliveryOption === 'delivery') ? 'delivery' : 'pickup',
+                    address: (deliveryOption === 'delivery') ? {
+                        street: billingInfo.address || '',
+                        district: '',
+                        city: billingInfo.city || '',
+                        notes: req.body.notes || ''
+                    } : undefined
+                },
+                paymentMethod: 'card',
+                paymentStatus: 'awaiting_3ds', // Will be updated in callback
+                status: 'awaiting_payment', // Will change to 'pending' after payment
+                notes: req.body.notes || ''
+            });
+
+            await orderBefore3DS.save();
+            console.log('✅ Order pre-created (awaiting 3DS payment):', orderBefore3DS._id, 'orderId:', orderId);
+
             console.log('💳 Sending 3D Secure Initialize request to Iyzico...');
 
             // Use 3D Secure Initialize for SMS verification
@@ -414,40 +461,128 @@ router.post('/3ds-callback', async (req, res, next) => {
             console.log('✅ 3D Secure payment result status:', result.status);
 
             if (result.status === 'success') {
-                // Payment verified! Now create the order
-                console.log('💳 Payment verified, creating order...');
+                // Payment verified! Now update order and send notification
+                console.log('💳 3DS Payment verified! Finding order:', orderId);
 
-                // Get order details from session or database
-                // For now, send success message
-                const successHtml = `<html>
-                    <head>
-                        <meta charset="UTF-8">
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <style>
-                            body { font-family: Arial; text-align: center; padding: 50px; background: #f0f9ff; }
-                            h1 { color: #10b981; }
-                            .order-code { font-size: 24px; font-weight: bold; margin: 20px 0; }
-                        </style>
-                    </head>
-                    <body>
-                        <h1>✅ Ödeme Başarılı!</h1>
-                        <p class="order-code">Sipariş Kodu: ${orderId}</p>
-                        <p>Siparişiniz oluşturuldu. Restorana giderek teslim alabilirsiniz.</p>
+                try {
+                    // Find order by orderId (pre-created before 3DS)
+                    const order = await Order.findOne({ orderId: orderId });
+
+                    if (!order) {
+                        console.error('❌ Order not found with orderId:', orderId);
+                        return res.send(`<html><body>
+                            <h1>⚠️ Sipariş Bulunamadı</h1>
+                            <p>Order ID: ${orderId}</p>
+                            <script>
+                                setTimeout(() => {
+                                    if (window.ReactNativeWebView) {
+                                        window.ReactNativeWebView.postMessage(JSON.stringify({
+                                            type: 'payment-failed',
+                                            error: 'Sipariş bulunamadı'
+                                        }));
+                                    }
+                                }, 1000);
+                            </script>
+                        </body></html>`);
+                    }
+
+                    console.log('✅ Order found:', order._id, 'Current status:', order.status);
+
+                    // Update order status to paid and pending
+                    order.paymentStatus = 'paid';
+                    order.status = 'pending'; // Restaurant can now approve
+                    order.paymentDetails = {
+                        transactionId: result.paymentId || result.authCode || 'unknown',
+                        paidAt: new Date()
+                    };
+                    await order.save();
+                    console.log('✅ Order updated to paid/pending status');
+
+                    // Update package quantities
+                    const restaurant = await Restaurant.findById(order.restaurant.id);
+                    if (restaurant) {
+                        for (const item of order.items) {
+                            const pkg = restaurant.packages?.find(p =>
+                                (p._id && p._id.toString() === item.packageId) || p.packageName === item.name
+                            );
+                            if (pkg) {
+                                pkg.quantity = Math.max(0, pkg.quantity - item.quantity);
+                                if (pkg.quantity === 0) {
+                                    pkg.status = 'inactive';
+                                }
+                                console.log(`📦 Updated package "${pkg.name}" quantity: ${pkg.quantity}`);
+                            }
+                        }
+                        await restaurant.save();
+                        console.log('✅ Package quantities updated');
+                    }
+
+                    // 🔔 SEND SOCKET.IO NOTIFICATION (CRITICAL FOR RESTAURANT PANEL!)
+                    const io = req.app.get('io');
+                    if (io) {
+                        const { transformOrderToUnified } = require('../utils/orderTransform');
+                        const transformedOrder = transformOrderToUnified(order);
+                        const roomName = `restaurant-${order.restaurant.id}`;
+
+                        const notification = {
+                            order: transformedOrder
+                        };
+
+                        console.log(`🔔 Sending Socket.IO notification to room: ${roomName}`);
+                        io.to(roomName).emit('new-order', notification);
+                        console.log('✅ Socket.IO notification sent for ONLINE payment! Restaurant will hear sound now.');
+                    } else {
+                        console.warn('⚠️ Socket.IO not available - notification not sent');
+                    }
+
+                    // Success HTML
+                    const successHtml = `<html>
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            <style>
+                                body { font-family: Arial; text-align: center; padding: 50px; background: #f0f9ff; }
+                                h1 { color: #10b981; }
+                                .order-code { font-size: 24px; font-weight: bold; margin: 20px 0; }
+                            </style>
+                        </head>
+                        <body>
+                            <h1>✅ Ödeme Başarılı!</h1>
+                            <p class="order-code">Sipariş Kodu: ${orderId}</p>
+                            <p>Siparişiniz oluşturuldu. Restorana giderek teslim alabilirsiniz.</p>
+                            <script>
+                                setTimeout(() => {
+                                    if (window.ReactNativeWebView) {
+                                        window.ReactNativeWebView.postMessage(JSON.stringify({
+                                            type: 'payment-success',
+                                            orderId: '${orderId}',
+                                            orderCode: '${orderId}'
+                                        }));
+                                    }
+                                }, 2000);
+                            </script>
+                        </body>
+                    </html>`;
+
+                    return res.send(successHtml);
+
+                } catch (orderUpdateError) {
+                    console.error('❌ 3DS success handler error:', orderUpdateError);
+                    return res.send(`<html><body>
+                        <h1>❌ Bir Hata Oluştu</h1>
+                        <p>${orderUpdateError.message}</p>
                         <script>
                             setTimeout(() => {
                                 if (window.ReactNativeWebView) {
                                     window.ReactNativeWebView.postMessage(JSON.stringify({
-                                        type: 'payment-success',
-                                        orderId: '${orderId}',
-                                        orderCode: '${orderId}'
+                                        type: 'payment-failed',
+                                        error: '${orderUpdateError.message}'
                                     }));
                                 }
-                            }, 2000);
+                            }, 1000);
                         </script>
-                    </body>
-                </html>`;
-
-                return res.send(successHtml);
+                    </body></html>`);
+                }
             } else {
                 console.error('❌ Payment verification failed:', result);
                 return res.send(`<html><body>
