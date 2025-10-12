@@ -372,19 +372,46 @@ router.get('/orders', async (req, res, next) => {
         // 🐛 DEBUG: Transform orders for backward compatibility
         const transformedOrders = orders.map(order => {
             const orderObj = order.toObject();
-            // IMPORTANT: Override fields AFTER spread to ensure they take precedence
-            return {
-                ...orderObj,
-                // ✅ Backward compatibility fields for restaurant panel (MUST override)
+            
+            // Build the transformed order with EXPLICIT field mapping
+            const transformed = {
+                _id: orderObj._id,
+                orderId: orderObj.orderId,
+                
+                // CRITICAL: Restaurant panel expects these exact fields
                 totalPrice: orderObj.pricing?.total || orderObj.totalPrice || 0,
-                packages: orderObj.items || orderObj.packages || [],
+                packages: orderObj.items?.map(item => ({
+                    ...item,
+                    packageId: item.packageId || item._id,
+                    packageName: item.name || item.packageName,
+                    price: Number(item.price) || 0,  // Ensure it's a number for toFixed()
+                    quantity: item.quantity || 1
+                })) || [],
                 pickupCode: orderObj.orderId || orderObj.pickupCode || 'N/A',
-                // Ensure these fields exist for panel
+                
+                // Customer & Restaurant info
                 customer: orderObj.customer || {},
                 restaurant: orderObj.restaurant || {},
+                
+                // Order metadata
                 status: orderObj.status || 'pending',
-                createdAt: orderObj.createdAt || new Date()
+                createdAt: orderObj.createdAt || new Date(),
+                orderDate: orderObj.orderDate || orderObj.createdAt,
+                
+                // Payment info
+                payment: orderObj.payment || {},
+                paymentMethod: orderObj.payment?.method || orderObj.paymentMethod || 'unknown',
+                
+                // Keep original nested structures for reference
+                pricing: orderObj.pricing,
+                items: orderObj.items,
+                delivery: orderObj.delivery
             };
+            
+            // Ensure totalPrice is ALWAYS a number
+            transformed.totalPrice = Number(transformed.totalPrice) || 0;
+            
+            return transformed;
         });
 
         console.log(`📤 Sending ${transformedOrders.length} orders to restaurant panel`);
