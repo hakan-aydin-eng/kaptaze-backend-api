@@ -4,6 +4,7 @@
  */
 
 const express = require('express');
+const { transformOrderToUnified } = require('../utils/orderTransform');
 const { body, validationResult } = require('express-validator');
 const { authenticate, authorize } = require('../middleware/auth');
 const Restaurant = require('../models/Restaurant');
@@ -369,50 +370,8 @@ router.get('/orders', async (req, res, next) => {
 
         console.log(`📦 Found ${orders.length} orders for restaurant ${restaurant.name}`);
 
-        // 🐛 DEBUG: Transform orders for backward compatibility
-        const transformedOrders = orders.map(order => {
-            const orderObj = order.toObject();
-            
-            // Build the transformed order with EXPLICIT field mapping
-            const transformed = {
-                _id: orderObj._id,
-                orderId: orderObj.orderId,
-                
-                // CRITICAL: Restaurant panel expects these exact fields
-                totalPrice: orderObj.pricing?.total || orderObj.totalPrice || 0,
-                packages: orderObj.items?.map(item => ({
-                    ...item,
-                    packageId: item.packageId || item._id,
-                    packageName: item.name || item.packageName,
-                    price: Number(item.price) || 0,  // Ensure it's a number for toFixed()
-                    quantity: item.quantity || 1
-                })) || [],
-                pickupCode: orderObj.orderId || orderObj.pickupCode || 'N/A',
-                
-                // Customer & Restaurant info
-                customer: orderObj.customer || {},
-                restaurant: orderObj.restaurant || {},
-                
-                // Order metadata
-                status: orderObj.status || 'pending',
-                createdAt: orderObj.createdAt || new Date(),
-                orderDate: orderObj.orderDate || orderObj.createdAt,
-                
-                // Payment info
-                payment: orderObj.payment || {},
-                paymentMethod: orderObj.payment?.method || orderObj.paymentMethod || 'unknown',
-                
-                // Keep original nested structures for reference
-                pricing: orderObj.pricing,
-                items: orderObj.items,
-                delivery: orderObj.delivery
-            };
-            
-            // Ensure totalPrice is ALWAYS a number
-            transformed.totalPrice = Number(transformed.totalPrice) || 0;
-            
-            return transformed;
-        });
+        // Use universal transform for consistency
+        const transformedOrders = orders.map(order => transformOrderToUnified(order));
 
         console.log(`📤 Sending ${transformedOrders.length} orders to restaurant panel`);
         
