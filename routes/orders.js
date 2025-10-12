@@ -256,12 +256,24 @@ router.get('/user/:userId', async (req, res) => {
         console.log('📱 Fetching orders for user:', userId);
 
         // Find all orders for this user - support both String and ObjectId formats
-        const orders = await Order.find({
-            $or: [
-                { 'customer.id': userId },  // New orders (String)
-                { 'customer.id': require('mongoose').Types.ObjectId(userId) }  // Old orders (ObjectId)
-            ]
-        })
+        let query;
+        
+        try {
+            // Try to create ObjectId for old orders
+            const objectId = new mongoose.Types.ObjectId(userId);
+            query = {
+                $or: [
+                    { 'customer.id': userId },  // New orders (String)
+                    { 'customer.id': objectId }  // Old orders (ObjectId)
+                ]
+            };
+        } catch (err) {
+            // If userId is not valid ObjectId format, just search as String
+            console.log('⚠️ userId is not valid ObjectId, searching as String only');
+            query = { 'customer.id': userId };
+        }
+        
+        const orders = await Order.find(query)
             .sort({ createdAt: -1 })
             .limit(100);
 
