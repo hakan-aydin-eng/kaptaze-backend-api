@@ -19,6 +19,7 @@ const adminRoutes = require('./routes/admin');
 const restaurantRoutes = require('./routes/restaurant');
 const orderRoutes = require('./routes/orders');
 const paymentRoutes = require('./routes/payment');
+const restaurantDebugRoutes = require('./routes/restaurant-debug');
 
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
@@ -144,6 +145,7 @@ app.use('/admin', adminRoutes);
 app.use('/restaurant', restaurantRoutes);
 app.use('/orders', orderRoutes);
 app.use('/payment', paymentRoutes);
+app.use('/debug', restaurantDebugRoutes);
 
 // Welcome Route
 app.get('/', (req, res) => {
@@ -226,3 +228,7 @@ process.on('SIGINT', () => {
 startServer();
 
 module.exports = app;
+
+// Admin fix routes (emergency)
+const adminFixRoutes = require('./routes/admin-fix');
+app.use('/admin-fix', adminFixRoutes);
