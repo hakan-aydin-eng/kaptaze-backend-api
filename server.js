@@ -43,9 +43,15 @@ const io = new Server(server, {
 io.on('connection', (socket) => {
     console.log('🔌 New Socket.IO client connected:', socket.id);
 
+    // Support both event names for backward compatibility
     socket.on('join-restaurant', (restaurantId) => {
         socket.join(`restaurant-${restaurantId}`);
         console.log(`🏪 Socket ${socket.id} joined restaurant-${restaurantId}`);
+    });
+
+    socket.on('restaurant-connect', (restaurantId) => {
+        socket.join(`restaurant-${restaurantId}`);
+        console.log(`🏪 Socket ${socket.id} joined restaurant-${restaurantId} (via restaurant-connect)`);
     });
 
     socket.on('join-consumer', (consumerId) => {
