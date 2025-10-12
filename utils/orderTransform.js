@@ -9,6 +9,7 @@ function transformOrderToUnified(order) {
     
     return {
         // IDs
+        _id: orderObj._id,  // Restaurant panel needs _id
         id: orderObj._id,
         orderId: orderObj.orderId,
         pickupCode: orderObj.orderId || orderObj.pickupCode || 'N/A',
