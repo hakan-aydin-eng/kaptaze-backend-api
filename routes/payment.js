@@ -265,6 +265,7 @@ router.post('/create', authenticate, async (req, res, next) => {
                 basketId: orderId,
                 paymentChannel: Iyzipay.PAYMENT_CHANNEL.WEB,
                 paymentGroup: Iyzipay.PAYMENT_GROUP.PRODUCT,
+                callbackUrl: 'https://kaptaze-backend-api.onrender.com/payment/3ds-callback',
                 paymentCard: {
                     cardHolderName: cardInfo.cardHolderName,
                     cardNumber: cardInfo.cardNumber,
