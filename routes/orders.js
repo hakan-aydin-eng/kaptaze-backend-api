@@ -279,10 +279,14 @@ router.get('/user/:userId', async (req, res) => {
 
         console.log(`✅ Found ${orders.length} orders for user ${userId}`);
 
+        // Transform orders to unified format
+        const { transformOrderToUnified } = require('../utils/orderTransform');
+        const transformedOrders = orders.map(order => transformOrderToUnified(order));
+
         res.json({
             success: true,
-            count: orders.length,
-            data: orders
+            count: transformedOrders.length,
+            data: transformedOrders
         });
 
     } catch (error) {
