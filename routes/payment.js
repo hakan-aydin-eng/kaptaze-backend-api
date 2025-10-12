@@ -178,7 +178,9 @@ router.post('/create', authenticate, async (req, res, next) => {
                 notes: req.body.notes || ''
             });
 
+            console.log('💾 Attempting to save order to MongoDB...');
             await order.save();
+            console.log('✅ Order saved successfully with ID:', order._id);
 
             // Update package quantities
             for (const item of basketItems) {
@@ -345,7 +347,21 @@ router.post('/create', authenticate, async (req, res, next) => {
 
         } else if (paymentMethodToUse === 'cash') {
             // Cash on delivery - create order directly
-            return await createOrderAfterPayment();
+            console.log('💵 Processing cash payment for restaurant:', restaurantDoc.name);
+            console.log('💵 Basket items:', basketItems);
+            
+            try {
+                const result = await createOrderAfterPayment();
+                console.log('💵 Cash order created successfully');
+                return result;
+            } catch (cashError) {
+                console.error('❌ Cash payment error:', cashError);
+                console.error('❌ Error stack:', cashError.stack);
+                return res.status(500).json({
+                    success: false,
+                    error: cashError.message || 'Failed to create cash order'
+                });
+            }
         }
 
     } catch (error) {
