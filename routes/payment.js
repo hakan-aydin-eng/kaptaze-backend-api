@@ -138,19 +138,14 @@ router.post('/create', authenticate, async (req, res, next) => {
                     packageId: item.packageId,
                     name: item.packageName,
                     description: item.description || '',
+                    originalPrice: item.price, // Original price before discount
                     price: item.discountedPrice || item.price,
                     quantity: item.quantity,
-                    totalPrice: (item.discountedPrice || item.price) * item.quantity
+                    total: (item.discountedPrice || item.price) * item.quantity
                 })),
 
-                // Pricing information (required by schema)
-                pricing: {
-                    subtotal: finalAmount,
-                    deliveryFee: 0,
-                    tax: 0,
-                    discount: 0,
-                    total: finalAmount
-                },
+                // Unified pricing - single totalPrice field
+                totalPrice: finalAmount,
 
                 // Delivery information
                 delivery: {
@@ -163,13 +158,13 @@ router.post('/create', authenticate, async (req, res, next) => {
                     } : undefined
                 },
 
-                // Payment information
-                payment: {
-                    method: (paymentMethodToUse === 'cash') ? 'cash' : 'credit_card',
-                    status: (paymentMethodToUse === 'cash') ? 'pending' : 'completed',
+                // Unified payment fields
+                paymentMethod: (paymentMethodToUse === 'cash') ? 'cash' : 'card',
+                paymentStatus: (paymentMethodToUse === 'cash') ? 'pending' : 'paid',
+                paymentDetails: (paymentMethodToUse !== 'cash') ? {
                     transactionId: orderId,
-                    paidAt: (paymentMethodToUse !== 'cash') ? new Date() : undefined
-                },
+                    paidAt: new Date()
+                } : null,
 
                 // Order status
                 status: 'pending',
@@ -202,9 +197,9 @@ router.post('/create', authenticate, async (req, res, next) => {
             console.log('📋 Order Code:', orderId);
             console.log('👤 Customer:', order.customer);
             console.log('🏪 Restaurant:', order.restaurant);
-            console.log('💰 Pricing:', order.pricing);
+            console.log('💰 Total Price:', order.totalPrice);
             console.log('📦 Items:', order.items);
-            console.log('📍 Payment Method:', order.payment.method);
+            console.log('📍 Payment Method:', order.paymentMethod);
             console.log('📊 Order Status:', order.status);
             console.log('=== END DEBUG ===\n');
 
