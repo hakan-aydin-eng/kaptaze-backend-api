@@ -14,6 +14,14 @@ const iyzico = new Iyzipay({
     uri: process.env.IYZICO_URI || 'https://sandbox-api.iyzipay.com'
 });
 
+// ✅ Generate short order code: XXX-ABC (3 digits + 3 letters)
+// Example: "245-ABC", "678-XYZ", "001-KTZ"
+function generateShortOrderCode() {
+    const num = Math.floor(Math.random() * 1000).toString().padStart(3, '0'); // 000-999
+    const letters = Math.random().toString(36).substr(2, 3).toUpperCase(); // 3 random letters
+    return `${num}-${letters}`;
+}
+
 // @route   POST /payment/create
 // @desc    Create payment with Iyzico
 // @access  Private
@@ -101,8 +109,9 @@ router.post('/create', authenticate, async (req, res, next) => {
 
         console.log('✅ Restaurant found:', restaurantDoc.name, 'Status:', restaurantDoc.status);
 
-        // Create unique order ID
-        const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+        // ✅ Create short, readable order ID (unified format)
+        // Example: "245-ABC", "678-XYZ"
+        const orderId = generateShortOrderCode();
 
         // Default to online payment if not specified
         const paymentMethodToUse = paymentMethod || 'online';
@@ -153,6 +162,12 @@ router.post('/create', authenticate, async (req, res, next) => {
                     const itemDiscountedTotal = item.price * item.quantity;
                     return sum + (itemOriginalTotal - itemDiscountedTotal);
                 }, 0),
+
+                // ✅ Pickup info (unified format)
+                pickupCode: orderId,  // Short code: "245-ABC"
+                pickupTime: restaurantDoc.operatingHours?.close
+                    ? `${restaurantDoc.operatingHours.open} - ${restaurantDoc.operatingHours.close}`
+                    : '18:00 - 21:00',
 
                 // Delivery information
                 delivery: {
@@ -351,6 +366,12 @@ router.post('/create', authenticate, async (req, res, next) => {
                     const itemDiscountedTotal = item.price * item.quantity;
                     return sum + (itemOriginalTotal - itemDiscountedTotal);
                 }, 0),
+
+                // ✅ Pickup info (unified format)
+                pickupCode: orderId,  // Short code: "245-ABC"
+                pickupTime: restaurantDoc.operatingHours?.close
+                    ? `${restaurantDoc.operatingHours.open} - ${restaurantDoc.operatingHours.close}`
+                    : '18:00 - 21:00',
 
                 delivery: {
                     type: (deliveryOption === 'delivery') ? 'delivery' : 'pickup',

@@ -146,6 +146,19 @@ const orderSchema = new mongoose.Schema({
         }
     },
 
+    // Pickup Information (Unified Format)
+    pickupCode: {
+        type: String,
+        default: function() {
+            // Will be set to orderId in payment.js
+            return this.orderId;
+        }
+    },
+    pickupTime: {
+        type: String,
+        default: '18:00 - 21:00'
+    },
+
     // Order Status
     status: {
         type: String,
