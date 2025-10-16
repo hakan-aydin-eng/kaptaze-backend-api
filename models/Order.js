@@ -160,6 +160,16 @@ const orderSchema = new mongoose.Schema({
     },
 
     // Order Status
+    // Restaurant Acknowledgment (GÖRDÜM)
+    acknowledged: {
+        type: Boolean,
+        default: false
+    },
+    acknowledgedAt: {
+        type: Date,
+        default: null
+    },
+
     status: {
         type: String,
         enum: [

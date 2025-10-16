@@ -484,6 +484,65 @@ router.patch('/orders/:orderId/status', async (req, res, next) => {
     }
 });
 
+// @route   PATCH /restaurant/orders/:orderId/acknowledge
+// @desc    Mark order as acknowledged (GÖRDÜM - restaurant saw the order)
+// @access  Private (Restaurant only)
+router.patch('/orders/:orderId/acknowledge', async (req, res, next) => {
+    try {
+        const { orderId } = req.params;
+
+        console.log('👁️ Acknowledging order:', orderId);
+
+        // Get restaurant from authenticated user
+        const restaurant = await Restaurant.findOne({ ownerId: req.user._id });
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Restaurant profile not found'
+            });
+        }
+
+        // Find order (unified format)
+        const order = await Order.findById(orderId);
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                error: 'Order not found'
+            });
+        }
+
+        // Verify order belongs to this restaurant
+        if (order.restaurant.id.toString() !== restaurant._id.toString()) {
+            return res.status(403).json({
+                success: false,
+                error: 'Not authorized to acknowledge this order'
+            });
+        }
+
+        // Mark as acknowledged
+        order.acknowledged = true;
+        order.acknowledgedAt = new Date();
+
+        await order.save();
+
+        console.log(`✅ Order ${orderId} acknowledged by restaurant at ${order.acknowledgedAt}`);
+
+        res.json({
+            success: true,
+            message: 'Order acknowledged successfully',
+            data: {
+                orderId: order._id,
+                acknowledged: order.acknowledged,
+                acknowledgedAt: order.acknowledgedAt
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Order acknowledgment error:', error);
+        next(error);
+    }
+});
+
 // @route   GET /restaurant/packages
 // @desc    Get restaurant packages
 // @access  Private (Restaurant)
