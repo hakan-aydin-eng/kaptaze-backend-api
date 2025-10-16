@@ -1,9 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const multer = require('multer');
 const Order = require('../models/Order');
 const Restaurant = require('../models/Restaurant');
 const { sendOrderNotification } = require('../services/emailService');
+
+// Configure multer for memory storage (we'll store photo URIs, not actual files)
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 } // 10MB max
+});
 
 // Test endpoint
 router.get('/test', (req, res) => {
@@ -303,19 +310,54 @@ router.get('/user/:userId', async (req, res) => {
 // @route   POST /orders/rating
 // @desc    Submit rating and review for an order
 // @access  Public (should be authenticated in production)
-router.post('/rating', async (req, res) => {
+// Supports both JSON (text-only) and FormData (with photos)
+router.post('/rating', upload.array('photos', 10), async (req, res) => {
     try {
-        const { orderId, rating, comment, photos } = req.body;
+        console.log('📊 Raw request body:', req.body);
+        console.log('📸 Files received:', req.files ? req.files.length : 0);
+        console.log('📋 Content-Type:', req.headers['content-type']);
+
+        const { orderId, rating, comment } = req.body;
+
+        // Handle photos from FormData or JSON
+        let photos = [];
+
+        if (req.files && req.files.length > 0) {
+            // Photos uploaded via FormData (actual files)
+            console.log('📸 Processing uploaded files...');
+            // For now, we'll just store the original URIs from mobile app
+            // In production, you'd upload to Cloudinary/S3 here
+            photos = req.files.map((file, index) => ({
+                uri: `uploaded_photo_${Date.now()}_${index}.jpg`,
+                url: `uploaded_photo_${Date.now()}_${index}.jpg`
+            }));
+        } else if (req.body.photos) {
+            // Photos sent as JSON array with URIs
+            try {
+                const photoData = typeof req.body.photos === 'string'
+                    ? JSON.parse(req.body.photos)
+                    : req.body.photos;
+                photos = Array.isArray(photoData) ? photoData : [];
+            } catch (err) {
+                console.warn('⚠️ Failed to parse photos:', err);
+            }
+        }
 
         console.log('📊 Submitting rating for order:', orderId);
         console.log('⭐ Rating:', rating);
-        console.log('📸 Photos count:', photos?.length || 0);
+        console.log('💬 Comment:', comment);
+        console.log('📸 Photos count:', photos.length);
 
         if (!orderId || !rating) {
             return res.status(400).json({
                 success: false,
                 error: 'Missing required fields',
-                message: 'orderId and rating are required'
+                message: 'orderId and rating are required',
+                debug: {
+                    receivedOrderId: orderId,
+                    receivedRating: rating,
+                    bodyKeys: Object.keys(req.body)
+                }
             });
         }
 
