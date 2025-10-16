@@ -147,6 +147,13 @@ router.post('/create', authenticate, async (req, res, next) => {
                 // Unified pricing - single totalPrice field
                 totalPrice: finalAmount,
 
+                // ✅ Calculate savings: (originalPrice × quantity) - totalPrice
+                savings: basketItems.reduce((sum, item) => {
+                    const itemOriginalTotal = (item.originalPrice || item.price) * item.quantity;
+                    const itemDiscountedTotal = item.price * item.quantity;
+                    return sum + (itemOriginalTotal - itemDiscountedTotal);
+                }, 0),
+
                 // Delivery information
                 delivery: {
                     type: (deliveryOption === 'delivery') ? 'delivery' : 'pickup',
@@ -337,6 +344,14 @@ router.post('/create', authenticate, async (req, res, next) => {
                     total: item.price * item.quantity
                 })),
                 totalPrice: finalAmount,
+
+                // ✅ Calculate savings: (originalPrice × quantity) - totalPrice
+                savings: basketItems.reduce((sum, item) => {
+                    const itemOriginalTotal = (item.originalPrice || item.price) * item.quantity;
+                    const itemDiscountedTotal = item.price * item.quantity;
+                    return sum + (itemOriginalTotal - itemDiscountedTotal);
+                }, 0),
+
                 delivery: {
                     type: (deliveryOption === 'delivery') ? 'delivery' : 'pickup',
                     address: (deliveryOption === 'delivery') ? {
