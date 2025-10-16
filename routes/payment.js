@@ -138,10 +138,10 @@ router.post('/create', authenticate, async (req, res, next) => {
                     packageId: item.packageId,
                     name: item.packageName,
                     description: item.description || '',
-                    originalPrice: item.price, // Original price before discount
-                    price: item.discountedPrice || item.price,
+                    originalPrice: item.originalPrice || item.price, // ✅ Use originalPrice from frontend
+                    price: item.price, // ✅ Discounted price
                     quantity: item.quantity,
-                    total: (item.discountedPrice || item.price) * item.quantity
+                    total: item.price * item.quantity
                 })),
 
                 // Unified pricing - single totalPrice field
@@ -331,10 +331,10 @@ router.post('/create', authenticate, async (req, res, next) => {
                     packageId: item.packageId,
                     name: item.packageName,
                     description: item.description || '',
-                    originalPrice: item.price,
-                    price: item.discountedPrice || item.price,
+                    originalPrice: item.originalPrice || item.price, // ✅ Use originalPrice from frontend
+                    price: item.price, // ✅ Discounted price
                     quantity: item.quantity,
-                    total: (item.discountedPrice || item.price) * item.quantity
+                    total: item.price * item.quantity
                 })),
                 totalPrice: finalAmount,
                 delivery: {
