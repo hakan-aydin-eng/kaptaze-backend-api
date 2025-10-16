@@ -298,4 +298,84 @@ router.get('/user/:userId', async (req, res) => {
         });
     }
 });
+
+// ✅ Submit order rating (Unified Format)
+// @route   POST /orders/rating
+// @desc    Submit rating and review for an order
+// @access  Public (should be authenticated in production)
+router.post('/rating', async (req, res) => {
+    try {
+        const { orderId, rating, comment, photos } = req.body;
+
+        console.log('📊 Submitting rating for order:', orderId);
+        console.log('⭐ Rating:', rating);
+        console.log('📸 Photos count:', photos?.length || 0);
+
+        if (!orderId || !rating) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields',
+                message: 'orderId and rating are required'
+            });
+        }
+
+        // Find order by orderId or _id
+        let order;
+        try {
+            const objectId = new mongoose.Types.ObjectId(orderId);
+            order = await Order.findOne({
+                $or: [
+                    { _id: objectId },
+                    { orderId: orderId }
+                ]
+            });
+        } catch (err) {
+            // If orderId is not valid ObjectId, search by orderId string
+            order = await Order.findOne({ orderId: orderId });
+        }
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                error: 'Order not found',
+                message: `Order ${orderId} not found`
+            });
+        }
+
+        // Update review (Unified Format)
+        order.review = {
+            rating: rating,
+            comment: comment || '',
+            photos: (photos || []).map(photo => ({
+                url: photo.uri || photo.url,  // Mobile sends uri, web sends url
+                uploadedAt: new Date()
+            })),
+            reviewedAt: new Date(),
+            isRated: true
+        };
+
+        await order.save();
+
+        console.log('✅ Rating saved successfully for order:', orderId);
+
+        res.json({
+            success: true,
+            message: 'Rating submitted successfully',
+            data: {
+                orderId: order._id,
+                rating: order.review.rating,
+                photosCount: order.review.photos.length
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error submitting rating:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to submit rating',
+            message: error.message
+        });
+    }
+});
+
 module.exports = router;

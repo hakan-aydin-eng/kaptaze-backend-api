@@ -227,7 +227,7 @@ const orderSchema = new mongoose.Schema({
         maxlength: 500
     },
     
-    // Rating and Review (after completion)
+    // Rating and Review (after completion) - Unified Format
     review: {
         rating: {
             type: Number,
@@ -238,7 +238,15 @@ const orderSchema = new mongoose.Schema({
             type: String,
             maxlength: 500
         },
-        reviewedAt: Date
+        photos: [{
+            url: String,  // Cloudinary or storage URL
+            uploadedAt: Date
+        }],
+        reviewedAt: Date,
+        isRated: {  // For easy queries
+            type: Boolean,
+            default: false
+        }
     },
 
     // Status History for tracking
