@@ -662,15 +662,29 @@ router.post('/push-token', async (req, res, next) => {
     }
 });
 
+// Haversine formula - calculate distance between two coordinates in km
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
 // @route   GET /auth/surprise-stories
-// @desc    Get surprise stories for a specific city (Unified Format)
+// @desc    Get surprise stories within 50km radius (Unified Format)
 // @access  Public (changed from Private for mobile app)
 router.get('/surprise-stories', async (req, res, next) => {
     try {
-        const { city, limit = 10 } = req.query;
+        const { city, limit = 10, lat, lng, radius = 50 } = req.query;
         const Order = require('../models/Order');
+        const Restaurant = require('../models/Restaurant');
 
-        console.log(`📸 Fetching surprise stories for city: ${city || 'all cities'}`);
+        console.log(`📸 Fetching surprise stories - City: ${city || 'any'}, Radius: ${radius}km, Coords: ${lat},${lng}`);
 
         // Build query for rated orders with photos
         const query = {
@@ -683,13 +697,48 @@ router.get('/surprise-stories', async (req, res, next) => {
             query['restaurant.address.city'] = city;
         }
 
-        // Fetch orders with ratings and photos
-        const ratedOrders = await Order.find(query)
+        // Fetch orders with ratings and photos (get more if we need to filter by distance)
+        const fetchLimit = lat && lng ? parseInt(limit) * 5 : parseInt(limit);
+        let ratedOrders = await Order.find(query)
             .sort({ 'review.reviewedAt': -1 })  // Newest reviews first
-            .limit(parseInt(limit))
+            .limit(fetchLimit)
             .lean();
 
-        console.log(`✅ Found ${ratedOrders.length} surprise stories${city ? ` for ${city}` : ''}`);
+        console.log(`✅ Found ${ratedOrders.length} rated orders from DB`);
+
+        // If user coordinates provided, filter by distance
+        if (lat && lng) {
+            const userLat = parseFloat(lat);
+            const userLng = parseFloat(lng);
+            const maxRadius = parseFloat(radius);
+
+            // Get restaurant coordinates and calculate distances
+            const storiesWithDistance = await Promise.all(ratedOrders.map(async (order) => {
+                try {
+                    const restaurant = await Restaurant.findById(order.restaurant.id);
+                    if (restaurant && restaurant.location && restaurant.location.coordinates) {
+                        const [restLng, restLat] = restaurant.location.coordinates;
+                        const distance = calculateDistance(userLat, userLng, restLat, restLng);
+
+                        if (distance <= maxRadius) {
+                            return { order, distance };
+                        }
+                    }
+                } catch (err) {
+                    console.warn('⚠️ Failed to calculate distance for order:', order._id);
+                }
+                return null;
+            }));
+
+            // Filter out nulls and sort by distance
+            ratedOrders = storiesWithDistance
+                .filter(item => item !== null)
+                .sort((a, b) => a.distance - b.distance)
+                .slice(0, parseInt(limit))
+                .map(item => item.order);
+
+            console.log(`✅ Filtered to ${ratedOrders.length} stories within ${maxRadius}km`);
+        }
 
         // Transform to stories format
         const stories = ratedOrders.map(order => {
@@ -714,7 +763,7 @@ router.get('/surprise-stories', async (req, res, next) => {
             success: true,
             stories: stories,
             count: stories.length,
-            city: city || 'all cities'
+            radius: lat && lng ? `${radius}km` : 'unlimited'
         });
     } catch (error) {
         console.error('❌ Surprise stories error:', error);
