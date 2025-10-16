@@ -663,44 +663,58 @@ router.post('/push-token', async (req, res, next) => {
 });
 
 // @route   GET /auth/surprise-stories
-// @desc    Get surprise stories for a specific city
+// @desc    Get surprise stories for a specific city (Unified Format)
 // @access  Public (changed from Private for mobile app)
 router.get('/surprise-stories', async (req, res, next) => {
     try {
         const { city, limit = 10 } = req.query;
-        console.log(`📸 Fetching surprise stories for city: ${city}`);
+        const Order = require('../models/Order');
 
-        // For now, return mock data until we implement real stories
-        const mockStories = [
-            {
-                id: '1',
-                restaurantName: 'Lezzetli Döner',
-                title: 'Günün Sürprizi',
-                description: 'Özel soslu döner menü',
-                image: 'https://picsum.photos/400/300',
-                discount: 30,
-                expiresIn: '2 saat',
-                city: city || 'Antalya'
-            },
-            {
-                id: '2',
-                restaurantName: 'Pizza Palace',
-                title: 'Akşam İndirimi',
-                description: 'Büyük boy pizzada %40 indirim',
-                image: 'https://picsum.photos/400/301',
-                discount: 40,
-                expiresIn: '4 saat',
-                city: city || 'Antalya'
-            }
-        ];
+        console.log(`📸 Fetching surprise stories for city: ${city || 'all cities'}`);
+
+        // Build query for rated orders with photos
+        const query = {
+            'review.isRated': true,
+            'review.photos.0': { $exists: true }  // At least one photo
+        };
+
+        // Filter by restaurant city if provided
+        if (city) {
+            query['restaurant.address.city'] = city;
+        }
+
+        // Fetch orders with ratings and photos
+        const ratedOrders = await Order.find(query)
+            .sort({ 'review.reviewedAt': -1 })  // Newest reviews first
+            .limit(parseInt(limit))
+            .lean();
+
+        console.log(`✅ Found ${ratedOrders.length} surprise stories${city ? ` for ${city}` : ''}`);
+
+        // Transform to stories format
+        const stories = ratedOrders.map(order => {
+            const firstPhoto = order.review.photos[0];
+            const firstItem = order.items && order.items[0];
+
+            return {
+                id: order._id.toString(),
+                orderId: order.orderId || order._id.toString(),
+                restaurantName: order.restaurant?.name || 'Restaurant',
+                restaurantCity: order.restaurant?.address?.city || 'Antalya',
+                title: firstItem?.packageName || firstItem?.name || 'Sürpriz Paket',
+                description: order.review?.comment || 'Lezzetli sürpriz paket!',
+                image: firstPhoto?.url || 'https://picsum.photos/400/300',
+                rating: order.review?.rating || 5,
+                reviewedAt: order.review?.reviewedAt,
+                photoCount: order.review?.photos?.length || 0
+            };
+        });
 
         res.json({
             success: true,
-            data: {
-                stories: mockStories.slice(0, parseInt(limit)),
-                total: mockStories.length,
-                city: city || 'Antalya'
-            }
+            stories: stories,
+            count: stories.length,
+            city: city || 'all cities'
         });
     } catch (error) {
         console.error('❌ Surprise stories error:', error);
