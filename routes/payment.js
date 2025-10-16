@@ -225,25 +225,47 @@ router.post('/create', authenticate, async (req, res, next) => {
             console.log('📊 Order Status:', order.status);
             console.log('=== END DEBUG ===\n');
 
-            // Send Socket.IO notification if available
+            // Send Socket.IO notification if available (FULL ORDER DATA for popup!)
             const io = req.app.get('io');
             if (io) {
                 const roomName = `restaurant-${restaurantDoc._id}`;
+
+                // 🎯 SEND FULL ORDER OBJECT (unified format) for popup notification
                 const notification = {
-                    orderId: order._id,
-                    orderCode: orderId,
-                    customerName: consumer.name,
-                    totalAmount: finalAmount,
-                    paymentMethod: paymentMethodToUse,
-                    items: basketItems
+                    order: {
+                        _id: order._id,
+                        orderId: orderId,
+                        orderCode: orderId,
+                        customer: {
+                            id: order.customer.id,
+                            name: order.customer.name || consumer.name,
+                            email: order.customer.email || consumer.email,
+                            phone: order.customer.phone || consumer.phone
+                        },
+                        restaurant: {
+                            id: order.restaurant.id,
+                            name: order.restaurant.name
+                        },
+                        items: order.items,
+                        totalPrice: order.totalPrice,
+                        paymentMethod: order.paymentMethod,
+                        status: order.status,
+                        createdAt: order.createdAt
+                    },
+                    message: `Yeni online sipariş! ${consumer.name} - ₺${finalAmount.toFixed(2)}`
                 };
 
-                console.log(`🔔 Sending Socket.IO notification to room: ${roomName}`);
-                console.log(`📦 Notification data:`, notification);
+                console.log(`🔔 Sending FULL ORDER Socket.IO notification to room: ${roomName}`);
+                console.log(`📦 Full order notification with customer phone:`, {
+                    orderId: notification.order._id,
+                    customerName: notification.order.customer.name,
+                    customerPhone: notification.order.customer.phone,
+                    totalPrice: notification.order.totalPrice
+                });
 
                 io.to(roomName).emit('new-order', notification);
 
-                console.log(`✅ Socket.IO notification sent to ${restaurantDoc.name}`);
+                console.log(`✅ Full order Socket.IO notification sent to ${restaurantDoc.name}`);
             } else {
                 console.warn('⚠️ Socket.IO not available - notification not sent');
             }
