@@ -440,7 +440,8 @@ router.post('/rating', upload.array('photos', 10), async (req, res) => {
             rating: rating,
             comment: comment || '',
             photos: (photos || []).map(photo => ({
-                url: photo.uri || photo.url,  // Mobile sends uri, web sends url
+                url: photo.url,  // Cloudinary HTTPS URL
+                cloudinaryId: photo.cloudinaryId || null,  // Cloudinary public_id for deletion
                 uploadedAt: new Date()
             })),
             reviewedAt: new Date(),

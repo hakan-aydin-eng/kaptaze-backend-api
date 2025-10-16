@@ -239,8 +239,18 @@ const orderSchema = new mongoose.Schema({
             maxlength: 500
         },
         photos: [{
-            url: String,  // Cloudinary or storage URL
-            uploadedAt: Date
+            url: {
+                type: String,
+                required: true
+            },
+            cloudinaryId: {
+                type: String,
+                default: null
+            },
+            uploadedAt: {
+                type: Date,
+                default: Date.now
+            }
         }],
         reviewedAt: Date,
         isRated: {  // For easy queries
