@@ -2,11 +2,12 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const multer = require('multer');
+const cloudinary = require('../config/cloudinary');
 const Order = require('../models/Order');
 const Restaurant = require('../models/Restaurant');
 const { sendOrderNotification } = require('../services/emailService');
 
-// Configure multer for memory storage (we'll store photo URIs, not actual files)
+// Configure multer for memory storage (we'll upload to Cloudinary)
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB max
@@ -319,25 +320,75 @@ router.post('/rating', upload.array('photos', 10), async (req, res) => {
 
         const { orderId, rating, comment } = req.body;
 
-        // Handle photos from FormData or JSON
+        // Handle photos from FormData or JSON and upload to Cloudinary
         let photos = [];
 
         if (req.files && req.files.length > 0) {
             // Photos uploaded via FormData (actual files)
-            console.log('📸 Processing uploaded files...');
-            // For now, we'll just store the original URIs from mobile app
-            // In production, you'd upload to Cloudinary/S3 here
-            photos = req.files.map((file, index) => ({
-                uri: `uploaded_photo_${Date.now()}_${index}.jpg`,
-                url: `uploaded_photo_${Date.now()}_${index}.jpg`
-            }));
+            console.log('📸 Processing uploaded files via multer...');
+
+            // Upload each file to Cloudinary
+            for (const file of req.files) {
+                try {
+                    const uploadResult = await new Promise((resolve, reject) => {
+                        const uploadStream = cloudinary.uploader.upload_stream(
+                            {
+                                folder: 'kaptaze/ratings',
+                                resource_type: 'image',
+                                transformation: [
+                                    { width: 800, height: 800, crop: 'limit' },
+                                    { quality: 'auto:good' }
+                                ]
+                            },
+                            (error, result) => {
+                                if (error) reject(error);
+                                else resolve(result);
+                            }
+                        );
+                        uploadStream.end(file.buffer);
+                    });
+
+                    photos.push({
+                        url: uploadResult.secure_url,
+                        cloudinaryId: uploadResult.public_id
+                    });
+                    console.log('✅ Uploaded to Cloudinary:', uploadResult.secure_url);
+                } catch (uploadError) {
+                    console.error('❌ Cloudinary upload failed:', uploadError);
+                }
+            }
         } else if (req.body.photos) {
-            // Photos sent as JSON array with URIs
+            // Photos sent as JSON array with URIs from mobile
+            console.log('📸 Processing photo URIs from mobile app...');
             try {
                 const photoData = typeof req.body.photos === 'string'
                     ? JSON.parse(req.body.photos)
                     : req.body.photos;
-                photos = Array.isArray(photoData) ? photoData : [];
+
+                const photoArray = Array.isArray(photoData) ? photoData : [];
+
+                // Upload each photo URI to Cloudinary
+                for (const photo of photoArray) {
+                    try {
+                        // Mobile sends file:// URIs which we can't upload directly
+                        // For now, we'll use a placeholder
+                        // In production, mobile should send base64 or use multipart upload
+                        console.log('📱 Mobile photo URI:', photo.uri || photo.url);
+
+                        // Skip file:// URIs for now - they can't be uploaded from server
+                        if ((photo.uri || photo.url || '').startsWith('file://')) {
+                            console.warn('⚠️ Skipping local file URI (cannot upload from server)');
+                            continue;
+                        }
+
+                        photos.push({
+                            url: photo.uri || photo.url,
+                            cloudinaryId: null
+                        });
+                    } catch (uploadError) {
+                        console.error('❌ Photo processing failed:', uploadError);
+                    }
+                }
             } catch (err) {
                 console.warn('⚠️ Failed to parse photos:', err);
             }
