@@ -748,6 +748,7 @@ router.get('/surprise-stories', async (req, res, next) => {
             return {
                 id: order._id.toString(),
                 orderId: order.orderId || order._id.toString(),
+                customerName: order.customer?.name || 'Kullanıcı',  // Show real customer name
                 restaurantName: order.restaurant?.name || 'Restaurant',
                 restaurantCity: order.restaurant?.address?.city || 'Antalya',
                 title: firstItem?.packageName || firstItem?.name || 'Sürpriz Paket',
