@@ -10,6 +10,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const Restaurant = require('../models/Restaurant');
 const User = require('../models/User');
 const Package = require('../models/Package');
+const Order = require('../models/Order');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -749,6 +750,9 @@ router.post('/profile/image', upload.single('image'), async (req, res, next) => 
 // @route   GET /restaurant/stats
 // @desc    Get restaurant statistics
 // @access  Private (Restaurant)
+// @route   GET /restaurant/stats
+// @desc    Get comprehensive restaurant statistics (unified format)
+// @access  Private (Restaurant only)
 router.get('/stats', async (req, res, next) => {
     try {
         const restaurant = await Restaurant.findOne({ ownerId: req.user._id });
@@ -759,23 +763,111 @@ router.get('/stats', async (req, res, next) => {
             });
         }
 
-        // Basic stats from restaurant model
+        const restaurantId = restaurant._id.toString();
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+        // Get all orders for this restaurant (unified format)
+        const allOrders = await Order.find({ 'restaurant.id': restaurantId });
+        const completedOrders = allOrders.filter(order => order.status === 'completed');
+
+        // Today's stats
+        const todayOrders = allOrders.filter(order => new Date(order.createdAt) >= todayStart);
+        const todayRevenue = todayOrders.reduce((sum, order) => sum + (order.totalPrice || 0), 0);
+        const todayCompleted = todayOrders.filter(order => order.status === 'completed').length;
+
+        // This week's stats
+        const weekOrders = allOrders.filter(order => new Date(order.createdAt) >= weekStart);
+        const weekRevenue = weekOrders.reduce((sum, order) => sum + (order.totalPrice || 0), 0);
+        const weekCompleted = weekOrders.filter(order => order.status === 'completed').length;
+
+        // This month's stats
+        const monthOrders = allOrders.filter(order => new Date(order.createdAt) >= monthStart);
+        const monthRevenue = monthOrders.reduce((sum, order) => sum + (order.totalPrice || 0), 0);
+        const monthCompleted = monthOrders.filter(order => order.status === 'completed').length;
+
+        // Last month's stats (for comparison)
+        const lastMonthOrders = allOrders.filter(order => {
+            const date = new Date(order.createdAt);
+            return date >= lastMonthStart && date <= lastMonthEnd;
+        });
+        const lastMonthRevenue = lastMonthOrders.reduce((sum, order) => sum + (order.totalPrice || 0), 0);
+
+        // Calculate food saved (unified format: order.items[].quantity)
+        const totalQuantity = completedOrders.reduce((sum, order) => {
+            const quantity = order.items?.[0]?.quantity || 0;
+            return sum + quantity;
+        }, 0);
+        const foodSaved = totalQuantity * 1.2; // 1.2 kg per package
+        const co2Saved = totalQuantity * 3.5; // 3.5 kg CO₂ per package
+
+        // Calculate average rating from completed orders with reviews
+        const ratedOrders = completedOrders.filter(order => order.review?.rating);
+        const avgRating = ratedOrders.length > 0
+            ? ratedOrders.reduce((sum, order) => sum + order.review.rating, 0) / ratedOrders.length
+            : restaurant.rating?.average || 0;
+
+        // Get active packages count
+        const activePackages = await Package.countDocuments({
+            restaurantId: restaurant._id,
+            isActive: true
+        });
+
+        // Calculate month-over-month growth
+        const revenueGrowth = lastMonthRevenue > 0
+            ? ((monthRevenue - lastMonthRevenue) / lastMonthRevenue * 100).toFixed(1)
+            : 0;
+
+        // Get unique customers
+        const uniqueCustomers = [...new Set(allOrders.map(order => order.customer?.id))].filter(Boolean);
+        const totalCustomers = uniqueCustomers.length;
+
+        // Calculate returning customers (customers with 2+ orders)
+        const customerOrderCounts = {};
+        allOrders.forEach(order => {
+            const customerId = order.customer?.id;
+            if (customerId) {
+                customerOrderCounts[customerId] = (customerOrderCounts[customerId] || 0) + 1;
+            }
+        });
+        const returningCustomers = Object.values(customerOrderCounts).filter(count => count >= 2).length;
+        const returningRate = totalCustomers > 0 ? ((returningCustomers / totalCustomers) * 100).toFixed(0) : 0;
+
         const stats = {
-            basic: {
-                totalOrders: restaurant.stats.totalOrders,
-                totalRevenue: restaurant.stats.totalRevenue,
-                activeMenuItems: restaurant.stats.activeMenuItems,
-                rating: restaurant.rating.average,
-                reviewCount: restaurant.rating.count
+            today: {
+                earnings: todayRevenue,
+                orders: todayOrders.length,
+                completed: todayCompleted
             },
-            status: {
-                accountStatus: restaurant.status,
-                isVerified: restaurant.isVerified,
-                joinedDate: restaurant.createdAt,
-                lastActivity: restaurant.lastActivity
+            thisWeek: {
+                earnings: weekRevenue,
+                orders: weekOrders.length,
+                completed: weekCompleted
             },
-            // TODO: Add more detailed analytics
-            note: 'Detailed analytics will be implemented in the next phase'
+            thisMonth: {
+                earnings: monthRevenue,
+                orders: monthOrders.length,
+                completed: monthCompleted,
+                growth: parseFloat(revenueGrowth)
+            },
+            lastMonth: {
+                earnings: lastMonthRevenue,
+                orders: lastMonthOrders.length
+            },
+            foodSaved: parseFloat(foodSaved.toFixed(1)),
+            co2Saved: parseFloat(co2Saved.toFixed(1)),
+            rating: parseFloat(avgRating.toFixed(1)),
+            reviewCount: ratedOrders.length,
+            activePackages: activePackages,
+            totalCustomers: totalCustomers,
+            returningCustomers: returningCustomers,
+            returningRate: parseInt(returningRate),
+            totalOrders: allOrders.length,
+            completedOrders: completedOrders.length
         };
 
         res.json({
@@ -784,6 +876,257 @@ router.get('/stats', async (req, res, next) => {
         });
 
     } catch (error) {
+        console.error('❌ Error fetching restaurant stats:', error);
+        next(error);
+    }
+});
+
+// @route   GET /restaurant/analytics
+// @desc    Get detailed analytics with insights (unified format)
+// @access  Private (Restaurant only)
+router.get('/analytics', async (req, res, next) => {
+    try {
+        const restaurant = await Restaurant.findOne({ ownerId: req.user._id });
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Restaurant profile not found'
+            });
+        }
+
+        const restaurantId = restaurant._id.toString();
+        const { start, end } = req.query;
+
+        // Default to last 30 days if no date range provided
+        const endDate = end ? new Date(end) : new Date();
+        const startDate = start ? new Date(start) : new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+        // Get all orders in date range (unified format)
+        const orders = await Order.find({
+            'restaurant.id': restaurantId,
+            createdAt: { $gte: startDate, $lte: endDate }
+        });
+
+        const completedOrders = orders.filter(order => order.status === 'completed');
+
+        // 1. Top Hours Analysis
+        const hourCounts = {};
+        orders.forEach(order => {
+            const hour = new Date(order.createdAt).getHours();
+            hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+        });
+        const topHours = Object.entries(hourCounts)
+            .map(([hour, count]) => ({
+                hour: `${hour}:00`,
+                count: count
+            }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5);
+
+        // 2. Top Packages Performance (unified format: order.items[])
+        const packageStats = {};
+        completedOrders.forEach(order => {
+            const item = order.items?.[0];
+            if (item) {
+                const packageId = item.packageId;
+                if (!packageStats[packageId]) {
+                    packageStats[packageId] = {
+                        name: item.name,
+                        sales: 0,
+                        revenue: 0,
+                        quantity: 0,
+                        ratings: []
+                    };
+                }
+                packageStats[packageId].sales += 1;
+                packageStats[packageId].revenue += item.price * item.quantity;
+                packageStats[packageId].quantity += item.quantity;
+                if (order.review?.rating) {
+                    packageStats[packageId].ratings.push(order.review.rating);
+                }
+            }
+        });
+
+        const topPackages = Object.values(packageStats)
+            .map(pkg => ({
+                name: pkg.name,
+                sales: pkg.sales,
+                revenue: pkg.revenue,
+                quantity: pkg.quantity,
+                avgRating: pkg.ratings.length > 0
+                    ? (pkg.ratings.reduce((sum, r) => sum + r, 0) / pkg.ratings.length).toFixed(1)
+                    : 0
+            }))
+            .sort((a, b) => b.revenue - a.revenue)
+            .slice(0, 10);
+
+        // 3. Daily Revenue Trend
+        const dailyRevenue = {};
+        completedOrders.forEach(order => {
+            const date = new Date(order.createdAt).toISOString().split('T')[0];
+            dailyRevenue[date] = (dailyRevenue[date] || 0) + (order.totalPrice || 0);
+        });
+        const revenueTrend = Object.entries(dailyRevenue)
+            .map(([date, amount]) => ({ date, amount }))
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // 4. Customer Insights
+        const uniqueCustomers = [...new Set(orders.map(order => order.customer?.id))].filter(Boolean);
+        const customerOrderCounts = {};
+        orders.forEach(order => {
+            const customerId = order.customer?.id;
+            if (customerId) {
+                customerOrderCounts[customerId] = (customerOrderCounts[customerId] || 0) + 1;
+            }
+        });
+        const returningCustomers = Object.values(customerOrderCounts).filter(count => count >= 2).length;
+        const customerRetentionRate = uniqueCustomers.length > 0
+            ? ((returningCustomers / uniqueCustomers.length) * 100).toFixed(0)
+            : 0;
+
+        // 5. Average Order Value
+        const totalRevenue = completedOrders.reduce((sum, order) => sum + (order.totalPrice || 0), 0);
+        const averageOrderValue = completedOrders.length > 0
+            ? (totalRevenue / completedOrders.length).toFixed(0)
+            : 0;
+
+        // 6. Payment Method Distribution
+        const paymentMethods = { cash: 0, online: 0 };
+        orders.forEach(order => {
+            const method = order.paymentMethod;
+            if (method === 'cash') paymentMethods.cash += 1;
+            else if (method === 'online' || method === 'card') paymentMethods.online += 1;
+        });
+
+        const analytics = {
+            dateRange: {
+                start: startDate.toISOString(),
+                end: endDate.toISOString()
+            },
+            topHours: topHours,
+            topPackages: topPackages,
+            dailyRevenue: revenueTrend,
+            customerInsights: {
+                total: uniqueCustomers.length,
+                returning: returningCustomers,
+                retentionRate: parseInt(customerRetentionRate)
+            },
+            averageOrderValue: parseFloat(averageOrderValue),
+            paymentMethods: {
+                cash: paymentMethods.cash,
+                online: paymentMethods.online,
+                cashPercentage: orders.length > 0 ? ((paymentMethods.cash / orders.length) * 100).toFixed(0) : 0,
+                onlinePercentage: orders.length > 0 ? ((paymentMethods.online / orders.length) * 100).toFixed(0) : 0
+            },
+            totalOrders: orders.length,
+            completedOrders: completedOrders.length,
+            totalRevenue: totalRevenue
+        };
+
+        res.json({
+            success: true,
+            data: analytics
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching restaurant analytics:', error);
+        next(error);
+    }
+});
+
+// @route   GET /restaurant/payments
+// @desc    Get payment history and financial details (unified format)
+// @access  Private (Restaurant only)
+router.get('/payments', async (req, res, next) => {
+    try {
+        const restaurant = await Restaurant.findOne({ ownerId: req.user._id });
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Restaurant profile not found'
+            });
+        }
+
+        const restaurantId = restaurant._id.toString();
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        // Get all completed orders (unified format)
+        const allOrders = await Order.find({
+            'restaurant.id': restaurantId,
+            status: 'completed'
+        }).sort({ createdAt: -1 });
+
+        const thisMonthOrders = allOrders.filter(order => new Date(order.createdAt) >= monthStart);
+
+        // Calculate totals
+        const thisMonthRevenue = thisMonthOrders.reduce((sum, order) => sum + (order.totalPrice || 0), 0);
+        const commissionRate = 0.10; // 10% commission
+        const thisMonthCommission = thisMonthRevenue * commissionRate;
+        const thisMonthNet = thisMonthRevenue - thisMonthCommission;
+
+        // Pending payments (orders from last 7 days)
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const pendingOrders = allOrders.filter(order => new Date(order.createdAt) >= weekAgo);
+        const pendingAmount = pendingOrders.reduce((sum, order) => sum + (order.totalPrice || 0), 0);
+        const pendingNet = pendingAmount * (1 - commissionRate);
+
+        // Build transaction list (unified format)
+        const transactions = allOrders.slice(0, 50).map(order => ({
+            date: order.createdAt,
+            orderId: order.orderId,
+            customer: order.customer?.name || 'Müşteri',
+            amount: order.totalPrice || 0,
+            commission: (order.totalPrice || 0) * commissionRate,
+            net: (order.totalPrice || 0) * (1 - commissionRate),
+            paymentMethod: order.paymentMethod,
+            status: 'completed'
+        }));
+
+        // Payment method breakdown
+        const cashOrders = allOrders.filter(order => order.paymentMethod === 'cash');
+        const onlineOrders = allOrders.filter(order => order.paymentMethod === 'online' || order.paymentMethod === 'card');
+        const cashRevenue = cashOrders.reduce((sum, order) => sum + (order.totalPrice || 0), 0);
+        const onlineRevenue = onlineOrders.reduce((sum, order) => sum + (order.totalPrice || 0), 0);
+
+        const payments = {
+            summary: {
+                thisMonth: {
+                    revenue: thisMonthRevenue,
+                    commission: parseFloat(thisMonthCommission.toFixed(2)),
+                    net: parseFloat(thisMonthNet.toFixed(2)),
+                    orders: thisMonthOrders.length
+                },
+                pending: {
+                    amount: pendingAmount,
+                    net: parseFloat(pendingNet.toFixed(2)),
+                    count: pendingOrders.length
+                },
+                commissionRate: commissionRate * 100,
+                nextPaymentDate: new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split('T')[0]
+            },
+            paymentMethods: {
+                cash: {
+                    orders: cashOrders.length,
+                    revenue: cashRevenue,
+                    percentage: allOrders.length > 0 ? ((cashOrders.length / allOrders.length) * 100).toFixed(0) : 0
+                },
+                online: {
+                    orders: onlineOrders.length,
+                    revenue: onlineRevenue,
+                    percentage: allOrders.length > 0 ? ((onlineOrders.length / allOrders.length) * 100).toFixed(0) : 0
+                }
+            },
+            transactions: transactions
+        };
+
+        res.json({
+            success: true,
+            data: payments
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching restaurant payments:', error);
         next(error);
     }
 });
