@@ -1577,4 +1577,84 @@ router.delete('/packages/:packageId', async (req, res, next) => {
     }
 });
 
+// @route   GET /admin/notification-history
+// @desc    Get notification history for admin panel
+// @access  Private (Admin)
+router.get('/notification-history', async (req, res, next) => {
+    try {
+        const { limit = 20 } = req.query;
+
+        // Get recent orders (notifications are based on orders)
+        const Order = require('../models/Order');
+        const recentOrders = await Order.find()
+            .sort({ createdAt: -1 })
+            .limit(parseInt(limit))
+            .select('_id orderId customer restaurant createdAt status paymentMethod');
+
+        const notifications = recentOrders.map(order => ({
+            id: order._id,
+            orderId: order.orderId,
+            type: 'new_order',
+            message: `New order from ${order.customer?.name || 'Customer'}`,
+            restaurant: order.restaurant?.name || 'Restaurant',
+            timestamp: order.createdAt,
+            status: order.status,
+            read: true // Admin panel doesn't track read/unread yet
+        }));
+
+        res.json({
+            success: true,
+            data: notifications
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching notification history:', error);
+        next(error);
+    }
+});
+
+// @route   GET /admin/notification-stats
+// @desc    Get notification statistics for admin panel
+// @access  Private (Admin)
+router.get('/notification-stats', async (req, res, next) => {
+    try {
+        const Order = require('../models/Order');
+
+        // Get today's orders
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const todayOrders = await Order.countDocuments({
+            createdAt: { $gte: today }
+        });
+
+        // Get pending orders (unread notifications)
+        const pendingOrders = await Order.countDocuments({
+            status: 'pending'
+        });
+
+        // Get total orders this week
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+
+        const weekOrders = await Order.countDocuments({
+            createdAt: { $gte: weekAgo }
+        });
+
+        res.json({
+            success: true,
+            data: {
+                total: todayOrders,
+                unread: pendingOrders,
+                today: todayOrders,
+                week: weekOrders
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching notification stats:', error);
+        next(error);
+    }
+});
+
 module.exports = router;
