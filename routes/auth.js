@@ -686,10 +686,13 @@ router.get('/surprise-stories', async (req, res, next) => {
 
         console.log(`📸 Fetching surprise stories - City: ${city || 'any'}, Radius: ${radius}km, Coords: ${lat},${lng}`);
 
-        // Build query for rated orders with photos
+        // Build query for rated orders with APPROVED photos only
         const query = {
             'review.isRated': true,
-            'review.photos.0': { $exists: true }  // At least one photo
+            'review.photos.0': { $exists: true },  // At least one photo
+            'review.photos': {
+                $elemMatch: { isApproved: true }  // Only approved photos
+            }
         };
 
         // Filter by restaurant city if provided
@@ -740,9 +743,11 @@ router.get('/surprise-stories', async (req, res, next) => {
             console.log(`✅ Filtered to ${ratedOrders.length} stories within ${maxRadius}km`);
         }
 
-        // Transform to stories format
+        // Transform to stories format (only approved photos)
         const stories = ratedOrders.map(order => {
-            const firstPhoto = order.review.photos[0];
+            // Get first approved photo
+            const approvedPhotos = order.review.photos.filter(p => p.isApproved);
+            const firstPhoto = approvedPhotos[0];
             const firstItem = order.items && order.items[0];
 
             return {
@@ -756,7 +761,7 @@ router.get('/surprise-stories', async (req, res, next) => {
                 image: firstPhoto?.url || 'https://picsum.photos/400/300',
                 rating: order.review?.rating || 5,
                 reviewedAt: order.review?.reviewedAt,
-                photoCount: order.review?.photos?.length || 0
+                photoCount: approvedPhotos.length  // Count only approved photos
             };
         });
 

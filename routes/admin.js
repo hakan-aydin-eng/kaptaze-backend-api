@@ -12,6 +12,7 @@ const Restaurant = require('../models/Restaurant');
 const User = require('../models/User');
 const Consumer = require('../models/Consumer');
 const Package = require('../models/Package');
+const Order = require('../models/Order');
 const EmailService = require('../services/emailService');
 
 const router = express.Router();
@@ -2033,6 +2034,374 @@ router.get('/restaurants/:restaurantId/stats', async (req, res, next) => {
 
     } catch (error) {
         console.error('❌ Error fetching restaurant stats:', error);
+        next(error);
+    }
+});
+
+// ==========================================
+// REVIEWS MANAGEMENT ENDPOINTS
+// ==========================================
+
+// @route   GET /admin/reviews/pending
+// @desc    Get pending (unapproved) photo reviews
+// @access  Private (Admin)
+router.get('/reviews/pending', [
+    query('page').optional().isInt({ min: 1 }).toInt(),
+    query('limit').optional().isInt({ min: 1, max: 100 }).toInt()
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                details: errors.array()
+            });
+        }
+
+        const page = req.query.page || 1;
+        const limit = req.query.limit || 20;
+        const skip = (page - 1) * limit;
+
+        console.log('📋 [DEBUG] Fetching pending reviews - page:', page, 'limit:', limit);
+
+        // Find orders with unapproved photos
+        const orders = await Order.find({
+            'review.isRated': true,
+            'review.photos.0': { $exists: true },
+            'review.photos': {
+                $elemMatch: { isApproved: false }
+            }
+        })
+        .sort({ 'review.reviewedAt': -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+        const total = await Order.countDocuments({
+            'review.isRated': true,
+            'review.photos.0': { $exists: true },
+            'review.photos': {
+                $elemMatch: { isApproved: false }
+            }
+        });
+
+        console.log(`✅ Found ${orders.length} orders with pending photos`);
+
+        // Format response with unified format
+        const reviews = orders.map(order => ({
+            _id: order._id,
+            orderId: order.orderId,
+            customer: {
+                id: order.customer?.id,
+                name: order.customer?.name || 'Unknown',
+                email: order.customer?.email || ''
+            },
+            restaurant: {
+                id: order.restaurant?.id,
+                name: order.restaurant?.name || 'Unknown Restaurant'
+            },
+            review: {
+                rating: order.review?.rating,
+                comment: order.review?.comment || '',
+                photos: order.review?.photos?.filter(photo => !photo.isApproved) || [],
+                reviewedAt: order.review?.reviewedAt
+            },
+            totalPrice: order.totalPrice || 0,
+            savings: order.savings || 0,
+            createdAt: order.createdAt
+        }));
+
+        res.json({
+            success: true,
+            data: {
+                reviews,
+                pagination: {
+                    total,
+                    page,
+                    limit,
+                    pages: Math.ceil(total / limit)
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching pending reviews:', error);
+        next(error);
+    }
+});
+
+// @route   POST /admin/reviews/:orderId/photos/:photoIndex/approve
+// @desc    Approve a photo in a review
+// @access  Private (Admin)
+router.post('/reviews/:orderId/photos/:photoIndex/approve', async (req, res, next) => {
+    try {
+        const { orderId, photoIndex } = req.params;
+        const adminUserId = req.user._id;
+
+        console.log('✅ [DEBUG] Approving photo - Order:', orderId, 'Photo index:', photoIndex);
+
+        const order = await Order.findOne({
+            $or: [
+                { _id: orderId },
+                { orderId: orderId }
+            ]
+        });
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                error: 'Order not found'
+            });
+        }
+
+        if (!order.review || !order.review.photos || !order.review.photos[photoIndex]) {
+            return res.status(404).json({
+                success: false,
+                error: 'Photo not found'
+            });
+        }
+
+        // Update photo approval status
+        order.review.photos[photoIndex].isApproved = true;
+        order.review.photos[photoIndex].approvedAt = new Date();
+        order.review.photos[photoIndex].approvedBy = adminUserId;
+        order.review.photos[photoIndex].rejectedReason = null; // Clear any previous rejection
+
+        await order.save();
+
+        console.log('✅ Photo approved successfully');
+
+        res.json({
+            success: true,
+            message: 'Photo approved successfully',
+            data: {
+                orderId: order.orderId,
+                photoIndex: parseInt(photoIndex),
+                approvedAt: order.review.photos[photoIndex].approvedAt,
+                approvedBy: adminUserId
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error approving photo:', error);
+        next(error);
+    }
+});
+
+// @route   POST /admin/reviews/:orderId/photos/:photoIndex/reject
+// @desc    Reject a photo in a review
+// @access  Private (Admin)
+router.post('/reviews/:orderId/photos/:photoIndex/reject', [
+    body('reason').optional().trim().isLength({ max: 200 })
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                details: errors.array()
+            });
+        }
+
+        const { orderId, photoIndex } = req.params;
+        const { reason } = req.body;
+
+        console.log('❌ [DEBUG] Rejecting photo - Order:', orderId, 'Photo index:', photoIndex);
+        console.log('📝 [DEBUG] Rejection reason:', reason || 'No reason provided');
+
+        const order = await Order.findOne({
+            $or: [
+                { _id: orderId },
+                { orderId: orderId }
+            ]
+        });
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                error: 'Order not found'
+            });
+        }
+
+        if (!order.review || !order.review.photos || !order.review.photos[photoIndex]) {
+            return res.status(404).json({
+                success: false,
+                error: 'Photo not found'
+            });
+        }
+
+        // Mark photo as rejected (keep isApproved: false)
+        order.review.photos[photoIndex].isApproved = false;
+        order.review.photos[photoIndex].rejectedReason = reason || 'Uygunsuz içerik';
+        order.review.photos[photoIndex].approvedAt = null;
+        order.review.photos[photoIndex].approvedBy = null;
+
+        await order.save();
+
+        console.log('✅ Photo rejected successfully');
+
+        res.json({
+            success: true,
+            message: 'Photo rejected successfully',
+            data: {
+                orderId: order.orderId,
+                photoIndex: parseInt(photoIndex),
+                rejectedReason: reason || 'Uygunsuz içerik'
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error rejecting photo:', error);
+        next(error);
+    }
+});
+
+// @route   GET /admin/reviews/approved
+// @desc    Get approved photo reviews
+// @access  Private (Admin)
+router.get('/reviews/approved', [
+    query('page').optional().isInt({ min: 1 }).toInt(),
+    query('limit').optional().isInt({ min: 1, max: 100 }).toInt()
+], async (req, res, next) => {
+    try {
+        const page = req.query.page || 1;
+        const limit = req.query.limit || 20;
+        const skip = (page - 1) * limit;
+
+        const orders = await Order.find({
+            'review.isRated': true,
+            'review.photos': {
+                $elemMatch: { isApproved: true }
+            }
+        })
+        .sort({ 'review.photos.approvedAt': -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+        const total = await Order.countDocuments({
+            'review.isRated': true,
+            'review.photos': {
+                $elemMatch: { isApproved: true }
+            }
+        });
+
+        const reviews = orders.map(order => ({
+            _id: order._id,
+            orderId: order.orderId,
+            customer: {
+                id: order.customer?.id,
+                name: order.customer?.name || 'Unknown',
+                email: order.customer?.email || ''
+            },
+            restaurant: {
+                id: order.restaurant?.id,
+                name: order.restaurant?.name || 'Unknown Restaurant'
+            },
+            review: {
+                rating: order.review?.rating,
+                comment: order.review?.comment || '',
+                photos: order.review?.photos?.filter(photo => photo.isApproved) || [],
+                reviewedAt: order.review?.reviewedAt
+            },
+            totalPrice: order.totalPrice || 0,
+            createdAt: order.createdAt
+        }));
+
+        res.json({
+            success: true,
+            data: {
+                reviews,
+                pagination: {
+                    total,
+                    page,
+                    limit,
+                    pages: Math.ceil(total / limit)
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching approved reviews:', error);
+        next(error);
+    }
+});
+
+// @route   GET /admin/reviews/rejected
+// @desc    Get rejected photo reviews
+// @access  Private (Admin)
+router.get('/reviews/rejected', [
+    query('page').optional().isInt({ min: 1 }).toInt(),
+    query('limit').optional().isInt({ min: 1, max: 100 }).toInt()
+], async (req, res, next) => {
+    try {
+        const page = req.query.page || 1;
+        const limit = req.query.limit || 20;
+        const skip = (page - 1) * limit;
+
+        const orders = await Order.find({
+            'review.isRated': true,
+            'review.photos': {
+                $elemMatch: {
+                    isApproved: false,
+                    rejectedReason: { $exists: true, $ne: null }
+                }
+            }
+        })
+        .sort({ 'review.reviewedAt': -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+        const total = await Order.countDocuments({
+            'review.isRated': true,
+            'review.photos': {
+                $elemMatch: {
+                    isApproved: false,
+                    rejectedReason: { $exists: true, $ne: null }
+                }
+            }
+        });
+
+        const reviews = orders.map(order => ({
+            _id: order._id,
+            orderId: order.orderId,
+            customer: {
+                id: order.customer?.id,
+                name: order.customer?.name || 'Unknown',
+                email: order.customer?.email || ''
+            },
+            restaurant: {
+                id: order.restaurant?.id,
+                name: order.restaurant?.name || 'Unknown Restaurant'
+            },
+            review: {
+                rating: order.review?.rating,
+                comment: order.review?.comment || '',
+                photos: order.review?.photos?.filter(photo => photo.rejectedReason) || [],
+                reviewedAt: order.review?.reviewedAt
+            },
+            totalPrice: order.totalPrice || 0,
+            createdAt: order.createdAt
+        }));
+
+        res.json({
+            success: true,
+            data: {
+                reviews,
+                pagination: {
+                    total,
+                    page,
+                    limit,
+                    pages: Math.ceil(total / limit)
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching rejected reviews:', error);
         next(error);
     }
 });

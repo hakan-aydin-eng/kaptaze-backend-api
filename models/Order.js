@@ -260,6 +260,23 @@ const orderSchema = new mongoose.Schema({
             uploadedAt: {
                 type: Date,
                 default: Date.now
+            },
+            isApproved: {
+                type: Boolean,
+                default: false  // Default: waiting for admin approval
+            },
+            approvedAt: {
+                type: Date,
+                default: null
+            },
+            approvedBy: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'User',
+                default: null
+            },
+            rejectedReason: {
+                type: String,
+                default: null
             }
         }],
         reviewedAt: Date,
