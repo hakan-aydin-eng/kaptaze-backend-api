@@ -227,9 +227,14 @@ router.post('/applications/:applicationId/approve', [
         // Create restaurant profile
         const restaurant = new Restaurant({
             name: application.businessName,
+            businessName: application.businessName,
             category: application.businessCategory,
             email: application.email,
             phone: application.phone,
+            firstName: application.firstName,
+            lastName: application.lastName,
+            username: finalUsername,
+            temporaryPassword: finalPassword,
             address: {
                 street: application.businessAddress,
                 district: application.district,
@@ -237,7 +242,7 @@ router.post('/applications/:applicationId/approve', [
             },
             location: {
                 type: 'Point',
-                coordinates: application.businessLongitude && application.businessLatitude 
+                coordinates: application.businessLongitude && application.businessLatitude
                     ? [application.businessLongitude, application.businessLatitude]
                     : [0, 0]
             },
