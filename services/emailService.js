@@ -76,6 +76,16 @@ class EmailService {
 
     async sendEmail({ to, subject, html, text }) {
         try {
+            console.log('📧 [DEBUG] Preparing to send email:');
+            console.log('  To:', to);
+            console.log('  Subject:', subject);
+            console.log('  From Email:', this.fromEmail);
+            console.log('  From Name:', this.fromName);
+            console.log('  Provider:', this.provider);
+            console.log('  API Key exists:', !!process.env.SENDGRID_API_KEY);
+            console.log('  API Key starts with SG:', process.env.SENDGRID_API_KEY?.startsWith('SG.'));
+            console.log('  API Key length:', process.env.SENDGRID_API_KEY?.length);
+
             const emailData = {
                 to,
                 from: {
@@ -88,8 +98,10 @@ class EmailService {
             };
 
             if (this.provider === 'sendgrid') {
+                console.log('📤 [DEBUG] Sending via SendGrid...');
                 const response = await sgMail.send(emailData);
                 console.log(`✅ Email sent successfully to ${to}:`, response[0].statusCode);
+                console.log('📨 Message ID:', response[0].headers['x-message-id']);
                 return { success: true, messageId: response[0].headers['x-message-id'] };
             } else {
                 // Mock mode - log email instead of sending
@@ -103,7 +115,11 @@ class EmailService {
             }
 
         } catch (error) {
-            console.error('❌ Email send failed:', error);
+            console.error('❌ [DEBUG] Email send failed:');
+            console.error('  Error message:', error.message);
+            console.error('  Error code:', error.code);
+            console.error('  Error response:', error.response?.body);
+            console.error('  Full error:', error);
             throw new Error(`Email send failed: ${error.message}`);
         }
     }
