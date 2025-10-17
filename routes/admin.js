@@ -1662,4 +1662,379 @@ router.get('/notification-stats', async (req, res, next) => {
     }
 });
 
+// ============================================================================
+// ORDER MANAGEMENT ENDPOINTS
+// ============================================================================
+
+const Order = require('../models/Order');
+
+// @route   GET /admin/orders
+// @desc    Get all orders with filtering, pagination, and search
+// @access  Private (Admin)
+router.get('/orders', [
+    query('status').optional().isIn(['pending', 'confirmed', 'completed', 'cancelled', 'all']),
+    query('restaurantId').optional().isMongoId(),
+    query('paymentMethod').optional().isIn(['cash', 'online', 'all']),
+    query('startDate').optional().isISO8601(),
+    query('endDate').optional().isISO8601(),
+    query('search').optional().trim(),
+    query('page').optional().isInt({ min: 1 }).toInt(),
+    query('limit').optional().isInt({ min: 1, max: 100 }).toInt()
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid query parameters',
+                details: errors.array()
+            });
+        }
+
+        const {
+            status = 'all',
+            restaurantId,
+            paymentMethod = 'all',
+            startDate,
+            endDate,
+            search = '',
+            page = 1,
+            limit = 20
+        } = req.query;
+
+        // Build filter
+        const filter = {};
+
+        if (status !== 'all') {
+            filter.status = status;
+        }
+
+        if (restaurantId) {
+            filter['restaurant.id'] = restaurantId;
+        }
+
+        if (paymentMethod !== 'all') {
+            filter.paymentMethod = paymentMethod;
+        }
+
+        if (startDate || endDate) {
+            filter.createdAt = {};
+            if (startDate) filter.createdAt.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                filter.createdAt.$lte = end;
+            }
+        }
+
+        if (search) {
+            filter.$or = [
+                { orderId: { $regex: search, $options: 'i' } },
+                { orderCode: { $regex: search, $options: 'i' } },
+                { 'customer.name': { $regex: search, $options: 'i' } },
+                { 'customer.phone': { $regex: search, $options: 'i' } },
+                { 'restaurant.name': { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        // Get orders with pagination
+        const skip = (page - 1) * limit;
+        const orders = await Order.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean();
+
+        const total = await Order.countDocuments(filter);
+
+        // Unified format - ensure all orders follow consistent structure
+        const unifiedOrders = orders.map(order => ({
+            _id: order._id,
+            orderId: order.orderId || order._id.toString(),
+            orderCode: order.orderCode || order.orderId,
+            customer: {
+                id: order.customer?.id || order.customerId,
+                name: order.customer?.name || 'Unknown',
+                email: order.customer?.email || '',
+                phone: order.customer?.phone || ''
+            },
+            restaurant: {
+                id: order.restaurant?.id || order.restaurantId,
+                name: order.restaurant?.name || 'Unknown Restaurant'
+            },
+            items: order.items || [],
+            totalPrice: order.totalPrice || 0,
+            savings: order.savings || 0,
+            paymentMethod: order.paymentMethod || 'cash',
+            status: order.status || 'pending',
+            createdAt: order.createdAt,
+            pickupTime: order.pickupTime || null,
+            pickupCode: order.pickupCode || null
+        }));
+
+        res.json({
+            success: true,
+            data: {
+                orders: unifiedOrders,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    pages: Math.ceil(total / limit)
+                },
+                filters: {
+                    status,
+                    restaurantId,
+                    paymentMethod,
+                    startDate,
+                    endDate,
+                    search
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching orders:', error);
+        next(error);
+    }
+});
+
+// @route   GET /admin/orders/:orderId
+// @desc    Get specific order details
+// @access  Private (Admin)
+router.get('/orders/:orderId', async (req, res, next) => {
+    try {
+        const { orderId } = req.params;
+
+        // Try to find by _id or orderId field
+        const order = await Order.findOne({
+            $or: [
+                { _id: orderId },
+                { orderId: orderId }
+            ]
+        }).lean();
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                error: 'Order not found'
+            });
+        }
+
+        // Unified format
+        const unifiedOrder = {
+            _id: order._id,
+            orderId: order.orderId || order._id.toString(),
+            orderCode: order.orderCode || order.orderId,
+            customer: {
+                id: order.customer?.id || order.customerId,
+                name: order.customer?.name || 'Unknown',
+                email: order.customer?.email || '',
+                phone: order.customer?.phone || ''
+            },
+            restaurant: {
+                id: order.restaurant?.id || order.restaurantId,
+                name: order.restaurant?.name || 'Unknown Restaurant',
+                phone: order.restaurant?.phone || '',
+                address: order.restaurant?.address || {}
+            },
+            items: order.items || [],
+            totalPrice: order.totalPrice || 0,
+            savings: order.savings || 0,
+            paymentMethod: order.paymentMethod || 'cash',
+            paymentStatus: order.paymentStatus || 'pending',
+            status: order.status || 'pending',
+            createdAt: order.createdAt,
+            pickupTime: order.pickupTime || null,
+            pickupCode: order.pickupCode || null,
+            notes: order.notes || '',
+            review: order.review || null
+        };
+
+        res.json({
+            success: true,
+            data: unifiedOrder
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching order details:', error);
+        next(error);
+    }
+});
+
+// @route   GET /admin/analytics/revenue
+// @desc    Get revenue analytics and statistics
+// @access  Private (Admin)
+router.get('/analytics/revenue', [
+    query('period').optional().isIn(['day', 'week', 'month', 'year', 'all']),
+    query('startDate').optional().isISO8601(),
+    query('endDate').optional().isISO8601()
+], async (req, res, next) => {
+    try {
+        const { period = 'month', startDate, endDate } = req.query;
+
+        // Calculate date range
+        let dateFilter = {};
+        const now = new Date();
+
+        if (startDate && endDate) {
+            dateFilter = {
+                createdAt: {
+                    $gte: new Date(startDate),
+                    $lte: new Date(endDate)
+                }
+            };
+        } else {
+            switch (period) {
+                case 'day':
+                    dateFilter.createdAt = { $gte: new Date(now.setHours(0, 0, 0, 0)) };
+                    break;
+                case 'week':
+                    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    dateFilter.createdAt = { $gte: weekAgo };
+                    break;
+                case 'month':
+                    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                    dateFilter.createdAt = { $gte: monthAgo };
+                    break;
+                case 'year':
+                    const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+                    dateFilter.createdAt = { $gte: yearAgo };
+                    break;
+                default:
+                    dateFilter = {};
+            }
+        }
+
+        // Get completed orders only
+        const revenueFilter = { ...dateFilter, status: { $in: ['completed', 'confirmed'] } };
+
+        // Total revenue
+        const revenueOrders = await Order.find(revenueFilter).lean();
+        const totalRevenue = revenueOrders.reduce((sum, order) => sum + (order.totalPrice || 0), 0);
+        const totalSavings = revenueOrders.reduce((sum, order) => sum + (order.savings || 0), 0);
+
+        // Order count by status
+        const totalOrders = await Order.countDocuments(dateFilter);
+        const pendingOrders = await Order.countDocuments({ ...dateFilter, status: 'pending' });
+        const completedOrders = await Order.countDocuments({ ...dateFilter, status: 'completed' });
+        const cancelledOrders = await Order.countDocuments({ ...dateFilter, status: 'cancelled' });
+
+        // Payment method breakdown
+        const cashOrders = await Order.countDocuments({ ...dateFilter, paymentMethod: 'cash' });
+        const onlineOrders = await Order.countDocuments({ ...dateFilter, paymentMethod: 'online' });
+
+        // Average order value
+        const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+        // Top restaurants by revenue
+        const topRestaurants = await Order.aggregate([
+            { $match: revenueFilter },
+            {
+                $group: {
+                    _id: '$restaurant.id',
+                    restaurantName: { $first: '$restaurant.name' },
+                    totalRevenue: { $sum: '$totalPrice' },
+                    orderCount: { $sum: 1 }
+                }
+            },
+            { $sort: { totalRevenue: -1 } },
+            { $limit: 10 }
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                period,
+                dateRange: dateFilter.createdAt || 'all',
+                revenue: {
+                    total: totalRevenue,
+                    totalSavings: totalSavings,
+                    average: avgOrderValue
+                },
+                orders: {
+                    total: totalOrders,
+                    pending: pendingOrders,
+                    completed: completedOrders,
+                    cancelled: cancelledOrders
+                },
+                paymentMethods: {
+                    cash: cashOrders,
+                    online: onlineOrders
+                },
+                topRestaurants: topRestaurants.map(r => ({
+                    restaurantId: r._id,
+                    restaurantName: r.restaurantName || 'Unknown',
+                    revenue: r.totalRevenue,
+                    orderCount: r.orderCount
+                }))
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching revenue analytics:', error);
+        next(error);
+    }
+});
+
+// @route   GET /admin/restaurants/:restaurantId/stats
+// @desc    Get statistics for a specific restaurant
+// @access  Private (Admin)
+router.get('/restaurants/:restaurantId/stats', async (req, res, next) => {
+    try {
+        const { restaurantId } = req.params;
+
+        // Verify restaurant exists
+        const restaurant = await Restaurant.findById(restaurantId);
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Restaurant not found'
+            });
+        }
+
+        // Get all orders for this restaurant
+        const orders = await Order.find({ 'restaurant.id': restaurantId }).lean();
+
+        // Calculate stats
+        const totalOrders = orders.length;
+        const completedOrders = orders.filter(o => o.status === 'completed').length;
+        const totalRevenue = orders
+            .filter(o => o.status === 'completed')
+            .reduce((sum, o) => sum + (o.totalPrice || 0), 0);
+
+        // Get active packages
+        const activePackages = await Package.countDocuments({
+            restaurantId: restaurantId,
+            isActive: true
+        });
+
+        // Calculate average rating
+        const ratedOrders = orders.filter(o => o.review && o.review.rating);
+        const avgRating = ratedOrders.length > 0
+            ? ratedOrders.reduce((sum, o) => sum + o.review.rating, 0) / ratedOrders.length
+            : 0;
+
+        res.json({
+            success: true,
+            data: {
+                restaurantId,
+                restaurantName: restaurant.name || restaurant.businessName,
+                stats: {
+                    totalOrders,
+                    completedOrders,
+                    totalRevenue,
+                    activePackages,
+                    averageRating: avgRating.toFixed(1),
+                    completionRate: totalOrders > 0 ? ((completedOrders / totalOrders) * 100).toFixed(1) : 0
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching restaurant stats:', error);
+        next(error);
+    }
+});
+
 module.exports = router;
