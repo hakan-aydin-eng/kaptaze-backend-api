@@ -902,7 +902,6 @@ router.get('/consumers/:consumerId', async (req, res, next) => {
         // Get consumer's order history (if Order model exists)
         let orders = [];
         try {
-            const Order = require('../models/Order');
             orders = await Order.find({ consumerId: consumer._id })
                 .populate('restaurantId', 'name category')
                 .sort({ createdAt: -1 })
@@ -1591,7 +1590,6 @@ router.get('/notification-history', async (req, res, next) => {
         const { limit = 20 } = req.query;
 
         // Get recent orders (notifications are based on orders)
-        const Order = require('../models/Order');
         const recentOrders = await Order.find()
             .sort({ createdAt: -1 })
             .limit(parseInt(limit))
@@ -1624,8 +1622,6 @@ router.get('/notification-history', async (req, res, next) => {
 // @access  Private (Admin)
 router.get('/notification-stats', async (req, res, next) => {
     try {
-        const Order = require('../models/Order');
-
         // Get today's orders
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -1666,8 +1662,6 @@ router.get('/notification-stats', async (req, res, next) => {
 // ============================================================================
 // ORDER MANAGEMENT ENDPOINTS
 // ============================================================================
-
-const Order = require('../models/Order');
 
 // @route   GET /admin/orders
 // @desc    Get all orders with filtering, pagination, and search
