@@ -286,6 +286,75 @@ const orderSchema = new mongoose.Schema({
         }
     },
 
+    // Commission & Settlement (calculated when order completed) - Unified Format
+    commission: {
+        rate: {
+            type: Number,
+            default: 10,  // Default: 10% commission
+            min: 0,
+            max: 100
+        },
+        amount: {
+            type: Number,
+            default: 0  // Platform commission amount (₺)
+        },
+        platformRevenue: {
+            type: Number,
+            default: 0  // Same as amount (for clarity)
+        },
+        restaurantPayout: {
+            type: Number,
+            default: 0  // Amount to be paid to restaurant (₺)
+        },
+        calculatedAt: {
+            type: Date,
+            default: null
+        },
+        customRate: {
+            type: Boolean,
+            default: false  // Was a custom rate applied?
+        },
+        rateReason: {
+            type: String,
+            default: null  // Reason for custom rate
+        }
+    },
+
+    settlement: {
+        status: {
+            type: String,
+            enum: ['pending', 'processing', 'completed', 'failed'],
+            default: 'pending'
+        },
+        scheduledDate: {
+            type: Date,
+            default: null  // Scheduled payment date (e.g., next Monday)
+        },
+        completedDate: {
+            type: Date,
+            default: null  // Actual payment date
+        },
+        method: {
+            type: String,
+            enum: ['bank_transfer', 'cash', 'wallet'],
+            default: 'bank_transfer'
+        },
+        reference: {
+            type: String,
+            default: null  // Bank transfer reference (e.g., TRF-2025-001)
+        },
+        processedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            default: null  // Admin who processed payment
+        },
+        notes: {
+            type: String,
+            maxlength: 500,
+            default: null
+        }
+    },
+
     // Status History for tracking
     statusHistory: [{
         status: String,
@@ -305,6 +374,8 @@ orderSchema.index({ 'customer.id': 1 });
 orderSchema.index({ 'restaurant.id': 1 });
 orderSchema.index({ status: 1 });
 orderSchema.index({ orderDate: -1 });
+orderSchema.index({ 'settlement.status': 1 });
+orderSchema.index({ 'settlement.scheduledDate': 1 });
 
 // Methods
 orderSchema.methods.updateStatus = function(newStatus, note = '') {
@@ -326,14 +397,58 @@ orderSchema.methods.updateStatus = function(newStatus, note = '') {
 orderSchema.methods.calculateTotal = function() {
     // Calculate subtotal from items
     this.pricing.subtotal = this.items.reduce((sum, item) => sum + item.totalPrice, 0);
-    
+
     // Calculate total
-    this.pricing.total = this.pricing.subtotal + 
-                        this.pricing.deliveryFee + 
-                        this.pricing.tax - 
+    this.pricing.total = this.pricing.subtotal +
+                        this.pricing.deliveryFee +
+                        this.pricing.tax -
                         this.pricing.discount;
-    
+
     return this.pricing.total;
+};
+
+// Calculate commission (called when order is completed)
+orderSchema.methods.calculateCommission = async function(customRate = null, reason = null) {
+    // Get commission rate (custom or default)
+    const commissionRate = customRate !== null ? customRate : (this.commission.rate || 10);
+
+    // Calculate amounts
+    const platformRevenue = (this.totalPrice * commissionRate) / 100;
+    const restaurantPayout = this.totalPrice - platformRevenue;
+
+    // Update commission fields
+    this.commission.rate = commissionRate;
+    this.commission.amount = platformRevenue;
+    this.commission.platformRevenue = platformRevenue;
+    this.commission.restaurantPayout = restaurantPayout;
+    this.commission.calculatedAt = new Date();
+    this.commission.customRate = customRate !== null;
+    this.commission.rateReason = reason;
+
+    // Schedule settlement for next Monday
+    const nextMonday = this.getNextMonday();
+    this.settlement.scheduledDate = nextMonday;
+    this.settlement.status = 'pending';
+
+    console.log(`💰 Commission calculated for order ${this.orderId}:`, {
+        totalPrice: this.totalPrice,
+        rate: commissionRate + '%',
+        platformRevenue: platformRevenue.toFixed(2),
+        restaurantPayout: restaurantPayout.toFixed(2),
+        settlementDate: nextMonday
+    });
+
+    return this;
+};
+
+// Helper: Get next Monday for settlement scheduling
+orderSchema.methods.getNextMonday = function() {
+    const today = new Date();
+    const daysUntilMonday = (8 - today.getDay()) % 7 || 7;
+    const nextMonday = new Date(today);
+    nextMonday.setDate(today.getDate() + daysUntilMonday);
+    nextMonday.setHours(0, 0, 0, 0);
+    return nextMonday;
 };
 
 // Virtual for order summary
@@ -350,5 +465,40 @@ orderSchema.virtual('summary').get(function() {
 
 // Ensure virtual fields are serialized
 orderSchema.set('toJSON', { virtuals: true });
+
+// Post-save hook: Calculate commission when order is created/paid
+orderSchema.post('save', async function(doc) {
+    // Only calculate commission if:
+    // 1. Payment is completed (paymentStatus = 'paid')
+    // 2. Commission not already calculated
+    if (doc.paymentStatus === 'paid' && !doc.commission.calculatedAt) {
+        try {
+            console.log(`💰 Auto-calculating commission for order ${doc.orderId}...`);
+
+            // Get restaurant to check for custom commission rate
+            const Restaurant = mongoose.model('Restaurant');
+            const restaurant = await Restaurant.findById(doc.restaurant.id);
+
+            const customRate = restaurant?.customCommissionRate || null;
+            const reason = restaurant?.commissionReason || null;
+
+            // Calculate commission
+            await doc.calculateCommission(customRate, reason);
+            await doc.save();
+
+            // Update restaurant wallet (add to pending balance)
+            if (restaurant) {
+                restaurant.wallet.pendingBalance = (restaurant.wallet.pendingBalance || 0) + doc.commission.restaurantPayout;
+                restaurant.wallet.totalEarned = (restaurant.wallet.totalEarned || 0) + doc.commission.restaurantPayout;
+                await restaurant.save();
+                console.log(`💰 Restaurant wallet updated: +₺${doc.commission.restaurantPayout.toFixed(2)} pending`);
+            }
+
+        } catch (error) {
+            console.error(`❌ Error calculating commission for order ${doc.orderId}:`, error.message);
+            // Don't throw - commission can be calculated manually if needed
+        }
+    }
+});
 
 module.exports = mongoose.model('Order', orderSchema);

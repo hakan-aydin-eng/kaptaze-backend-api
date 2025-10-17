@@ -2400,4 +2400,373 @@ router.get('/reviews/rejected', [
     }
 });
 
+// ============================================================
+// TREASURY (KASA) ENDPOINTS - Commission & Settlement
+// ============================================================
+
+// @route   GET /admin/treasury/overview
+// @desc    Get treasury overview (revenue, pending settlements, etc.)
+// @access  Private (Admin)
+router.get('/treasury/overview', [
+    query('startDate').optional().isISO8601().toDate(),
+    query('endDate').optional().isISO8601().toDate()
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                details: errors.array()
+            });
+        }
+
+        const { startDate, endDate } = req.query;
+
+        // Build date filter
+        const dateFilter = {};
+        if (startDate || endDate) {
+            dateFilter['commission.calculatedAt'] = {};
+            if (startDate) dateFilter['commission.calculatedAt'].$gte = startDate;
+            if (endDate) dateFilter['commission.calculatedAt'].$lte = endDate;
+        }
+
+        // Get all paid orders with commission calculated
+        const orders = await Order.find({
+            paymentStatus: 'paid',
+            'commission.calculatedAt': { $ne: null },
+            ...dateFilter
+        }).lean();
+
+        // Calculate totals
+        const totalRevenue = orders.reduce((sum, order) => sum + (order.commission?.platformRevenue || 0), 0);
+        const totalRestaurantPayout = orders.reduce((sum, order) => sum + (order.commission?.restaurantPayout || 0), 0);
+        const totalOrders = orders.length;
+        const averageCommissionRate = orders.length > 0
+            ? orders.reduce((sum, order) => sum + (order.commission?.rate || 10), 0) / orders.length
+            : 10;
+
+        // Get pending settlements
+        const pendingSettlements = await Order.aggregate([
+            {
+                $match: {
+                    'settlement.status': 'pending',
+                    'commission.calculatedAt': { $ne: null }
+                }
+            },
+            {
+                $group: {
+                    _id: '$restaurant.id',
+                    restaurantName: { $first: '$restaurant.name' },
+                    pendingAmount: { $sum: '$commission.restaurantPayout' },
+                    orderCount: { $sum: 1 },
+                    nextSettlement: { $min: '$settlement.scheduledDate' }
+                }
+            },
+            { $sort: { pendingAmount: -1 } }
+        ]);
+
+        const totalPendingAmount = pendingSettlements.reduce((sum, item) => sum + item.pendingAmount, 0);
+
+        // Get completed settlements (last 30 days)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const completedSettlements = await Order.find({
+            'settlement.status': 'completed',
+            'settlement.completedDate': { $gte: thirtyDaysAgo }
+        }).lean();
+
+        const totalCompletedAmount = completedSettlements.reduce(
+            (sum, order) => sum + (order.commission?.restaurantPayout || 0),
+            0
+        );
+
+        res.json({
+            success: true,
+            data: {
+                overview: {
+                    totalRevenue: totalRevenue.toFixed(2),
+                    totalRestaurantPayout: totalRestaurantPayout.toFixed(2),
+                    totalOrders,
+                    averageCommissionRate: averageCommissionRate.toFixed(2) + '%'
+                },
+                pending: {
+                    totalAmount: totalPendingAmount.toFixed(2),
+                    restaurantCount: pendingSettlements.length,
+                    settlements: pendingSettlements.map(s => ({
+                        restaurantId: s._id,
+                        restaurantName: s.restaurantName,
+                        amount: s.pendingAmount.toFixed(2),
+                        orderCount: s.orderCount,
+                        nextSettlement: s.nextSettlement
+                    }))
+                },
+                completed: {
+                    last30Days: totalCompletedAmount.toFixed(2),
+                    count: completedSettlements.length
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching treasury overview:', error);
+        next(error);
+    }
+});
+
+// @route   GET /admin/treasury/settlements
+// @desc    Get all settlements with filtering
+// @access  Private (Admin)
+router.get('/treasury/settlements', [
+    query('status').optional().isIn(['pending', 'processing', 'completed', 'failed']),
+    query('restaurantId').optional().isMongoId(),
+    query('page').optional().isInt({ min: 1 }).toInt(),
+    query('limit').optional().isInt({ min: 1, max: 100 }).toInt()
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                details: errors.array()
+            });
+        }
+
+        const { status, restaurantId, page = 1, limit = 50 } = req.query;
+        const skip = (page - 1) * limit;
+
+        // Build filter
+        const filter = {
+            'commission.calculatedAt': { $ne: null }
+        };
+
+        if (status) {
+            filter['settlement.status'] = status;
+        }
+
+        if (restaurantId) {
+            filter['restaurant.id'] = restaurantId;
+        }
+
+        // Get orders grouped by restaurant
+        const settlements = await Order.aggregate([
+            { $match: filter },
+            {
+                $group: {
+                    _id: '$restaurant.id',
+                    restaurantName: { $first: '$restaurant.name' },
+                    orders: {
+                        $push: {
+                            orderId: '$orderId',
+                            totalPrice: '$totalPrice',
+                            commissionRate: '$commission.rate',
+                            platformRevenue: '$commission.platformRevenue',
+                            restaurantPayout: '$commission.restaurantPayout',
+                            settlementStatus: '$settlement.status',
+                            scheduledDate: '$settlement.scheduledDate',
+                            completedDate: '$settlement.completedDate',
+                            orderDate: '$orderDate'
+                        }
+                    },
+                    totalAmount: { $sum: '$commission.restaurantPayout' },
+                    orderCount: { $sum: 1 },
+                    nextSettlement: { $min: '$settlement.scheduledDate' }
+                }
+            },
+            { $sort: { nextSettlement: 1 } },
+            { $skip: skip },
+            { $limit: limit }
+        ]);
+
+        const total = await Order.countDocuments(filter);
+
+        res.json({
+            success: true,
+            data: {
+                settlements: settlements.map(s => ({
+                    restaurantId: s._id,
+                    restaurantName: s.restaurantName,
+                    totalAmount: s.totalAmount.toFixed(2),
+                    orderCount: s.orderCount,
+                    nextSettlement: s.nextSettlement,
+                    orders: s.orders
+                })),
+                pagination: {
+                    total,
+                    page,
+                    limit,
+                    pages: Math.ceil(total / limit)
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching settlements:', error);
+        next(error);
+    }
+});
+
+// @route   POST /admin/treasury/settlements/complete
+// @desc    Mark settlements as completed for a restaurant
+// @access  Private (Admin)
+router.post('/treasury/settlements/complete', [
+    body('restaurantId').notEmpty().isMongoId().withMessage('Valid restaurant ID required'),
+    body('orderIds').isArray({ min: 1 }).withMessage('Order IDs array required'),
+    body('reference').optional().trim().isLength({ max: 100 }),
+    body('notes').optional().trim().isLength({ max: 500 })
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                details: errors.array()
+            });
+        }
+
+        const { restaurantId, orderIds, reference, notes } = req.body;
+        const adminUserId = req.user.id;
+
+        // Get orders
+        const orders = await Order.find({
+            orderId: { $in: orderIds },
+            'restaurant.id': restaurantId,
+            'settlement.status': 'pending'
+        });
+
+        if (orders.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'No pending settlements found for these orders'
+            });
+        }
+
+        // Calculate total payout
+        let totalPayout = 0;
+
+        // Update each order
+        for (const order of orders) {
+            order.settlement.status = 'completed';
+            order.settlement.completedDate = new Date();
+            order.settlement.reference = reference || `TRF-${Date.now()}`;
+            order.settlement.processedBy = adminUserId;
+            order.settlement.notes = notes;
+            await order.save();
+
+            totalPayout += order.commission.restaurantPayout;
+        }
+
+        // Update restaurant wallet
+        const restaurant = await Restaurant.findById(restaurantId);
+        if (restaurant) {
+            restaurant.wallet.pendingBalance -= totalPayout;
+            restaurant.wallet.paidBalance += totalPayout;
+            restaurant.wallet.lastSettlementDate = new Date();
+            await restaurant.save();
+        }
+
+        console.log(`✅ Settlement completed: ₺${totalPayout.toFixed(2)} paid to ${restaurant?.name}`);
+
+        res.json({
+            success: true,
+            message: 'Settlement completed successfully',
+            data: {
+                restaurantId,
+                restaurantName: restaurant?.name,
+                orderCount: orders.length,
+                totalPayout: totalPayout.toFixed(2),
+                reference: reference || `TRF-${Date.now()}`,
+                completedAt: new Date()
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error completing settlement:', error);
+        next(error);
+    }
+});
+
+// @route   GET /admin/treasury/commission-settings
+// @desc    Get commission settings (default rate and restaurant-specific rates)
+// @access  Private (Admin)
+router.get('/treasury/commission-settings', async (req, res, next) => {
+    try {
+        // Get restaurants with custom commission rates
+        const customRates = await Restaurant.find({
+            customCommissionRate: { $ne: null }
+        }).select('_id name customCommissionRate commissionReason').lean();
+
+        res.json({
+            success: true,
+            data: {
+                defaultRate: 10, // Default 10%
+                customRates: customRates.map(r => ({
+                    restaurantId: r._id,
+                    restaurantName: r.name,
+                    rate: r.customCommissionRate,
+                    reason: r.commissionReason
+                }))
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching commission settings:', error);
+        next(error);
+    }
+});
+
+// @route   PATCH /admin/treasury/commission-settings/custom
+// @desc    Set custom commission rate for a restaurant
+// @access  Private (Admin)
+router.patch('/treasury/commission-settings/custom', [
+    body('restaurantId').notEmpty().isMongoId().withMessage('Valid restaurant ID required'),
+    body('rate').notEmpty().isFloat({ min: 0, max: 100 }).withMessage('Rate must be between 0 and 100'),
+    body('reason').optional().trim().isLength({ max: 200 })
+], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                details: errors.array()
+            });
+        }
+
+        const { restaurantId, rate, reason } = req.body;
+
+        const restaurant = await Restaurant.findById(restaurantId);
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Restaurant not found'
+            });
+        }
+
+        restaurant.customCommissionRate = rate;
+        restaurant.commissionReason = reason || `Custom rate set to ${rate}%`;
+        await restaurant.save();
+
+        console.log(`✅ Custom commission rate set: ${restaurant.name} → ${rate}%`);
+
+        res.json({
+            success: true,
+            message: 'Custom commission rate updated',
+            data: {
+                restaurantId: restaurant._id,
+                restaurantName: restaurant.name,
+                rate: rate,
+                reason: restaurant.commissionReason
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error updating custom commission rate:', error);
+        next(error);
+    }
+});
+
 module.exports = router;

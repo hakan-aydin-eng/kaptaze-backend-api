@@ -279,6 +279,42 @@ const restaurantSchema = new mongoose.Schema({
             default: 0
         }
     },
+
+    // Commission & Settlement (Unified Format)
+    customCommissionRate: {
+        type: Number,
+        default: null,  // null = use default 10%, otherwise custom rate
+        min: 0,
+        max: 100
+    },
+    commissionReason: {
+        type: String,
+        default: null  // Reason for custom commission rate
+    },
+
+    // Restaurant Wallet (Unified Format)
+    wallet: {
+        pendingBalance: {
+            type: Number,
+            default: 0  // Orders completed but not yet settled (₺)
+        },
+        paidBalance: {
+            type: Number,
+            default: 0  // Total amount paid to restaurant (₺)
+        },
+        totalEarned: {
+            type: Number,
+            default: 0  // Lifetime earnings (₺)
+        },
+        lastSettlementDate: {
+            type: Date,
+            default: null
+        },
+        nextSettlementDate: {
+            type: Date,
+            default: null
+        }
+    },
     
     // Linked Records
     applicationId: {
