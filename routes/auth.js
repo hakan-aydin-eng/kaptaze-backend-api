@@ -778,15 +778,50 @@ router.get('/surprise-stories', async (req, res, next) => {
 router.post('/refresh-token', async (req, res, next) => {
     try {
         const { userId, oldToken } = req.body;
-        console.log('🔄 Refreshing token for user:', userId);
+        console.log('🔄 [DEBUG] Token refresh request for user:', userId);
+        console.log('🔑 [DEBUG] Old token provided:', !!oldToken);
+
+        if (!userId || !oldToken) {
+            return res.status(400).json({
+                success: false,
+                error: 'userId and oldToken are required'
+            });
+        }
+
+        // Verify old token (allow expired tokens for refresh)
+        let decoded;
+        try {
+            decoded = jwt.verify(oldToken, process.env.JWT_SECRET || 'fallback-jwt-secret', {
+                ignoreExpiration: true // Allow expired tokens for refresh
+            });
+            console.log('✅ [DEBUG] Old token decoded successfully:', decoded.id);
+        } catch (error) {
+            console.error('❌ [DEBUG] Token decode failed:', error.message);
+            return res.status(401).json({
+                success: false,
+                error: 'Invalid token'
+            });
+        }
+
+        // Verify userId matches token
+        if (decoded.id !== userId) {
+            console.error('❌ [DEBUG] UserId mismatch:', { tokenId: decoded.id, requestedId: userId });
+            return res.status(401).json({
+                success: false,
+                error: 'Token userId mismatch'
+            });
+        }
 
         const consumer = await Consumer.findById(userId);
         if (!consumer) {
+            console.error('❌ [DEBUG] User not found:', userId);
             return res.status(404).json({
                 success: false,
                 error: 'User not found'
             });
         }
+
+        console.log('👤 [DEBUG] Consumer found:', consumer.email);
 
         // Generate new token
         const token = jwt.sign(
@@ -798,6 +833,8 @@ router.post('/refresh-token', async (req, res, next) => {
             process.env.JWT_SECRET || 'fallback-jwt-secret',
             { expiresIn: '30d' }
         );
+
+        console.log('✅ [DEBUG] New token generated successfully');
 
         res.json({
             success: true,
