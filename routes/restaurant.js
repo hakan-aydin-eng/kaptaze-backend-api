@@ -231,7 +231,7 @@ router.get('/me', async (req, res, next) => {
 // @access  Private (Restaurant)
 router.put('/me', [
     body('description').optional().trim().isLength({ max: 500 }),
-    body('socialMedia.website').optional().trim().isURL().withMessage('Geçerli bir web sitesi URL\'si girin'),
+    body('socialMedia.website').optional({ checkFalsy: true }).trim().isURL().withMessage('Geçerli bir web sitesi URL\'si girin'),
     body('phone').optional().trim().matches(/^\+?[\d\s-()]+$/),
     body('openingHours').optional().isArray(),
     body('operatingHours.open').optional().matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Açılış saati format: HH:MM'),
