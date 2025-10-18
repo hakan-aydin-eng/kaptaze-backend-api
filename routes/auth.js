@@ -1000,5 +1000,136 @@ router.get('/favorites', authenticate, async (req, res, next) => {
     }
 });
 
+// @route   POST /auth/forgot-password
+// @desc    Send password reset email to consumer
+// @access  Public
+router.post('/forgot-password', [
+    body('email')
+        .isEmail()
+        .withMessage('Please enter a valid email address')
+        .normalizeEmail()
+], async (req, res, next) => {
+    try {
+        // Check for validation errors
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const { email } = req.body;
+
+        // Find consumer by email
+        const consumer = await Consumer.findOne({ email: email.toLowerCase() });
+
+        if (!consumer) {
+            // Don't reveal if email exists or not (security best practice)
+            return res.status(200).json({
+                success: true,
+                message: 'Eğer bu e-posta kayıtlıysa, şifre sıfırlama bağlantısı gönderilecektir.'
+            });
+        }
+
+        // Generate reset token (valid for 1 hour)
+        const resetToken = jwt.sign(
+            {
+                id: consumer._id,
+                email: consumer.email,
+                type: 'password-reset'
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: '1h' }
+        );
+
+        // Send password reset email
+        const emailService = require('../services/emailService');
+        await emailService.sendPasswordResetEmail(consumer, resetToken);
+
+        console.log(`🔒 Password reset email sent to: ${consumer.email}`);
+
+        res.status(200).json({
+            success: true,
+            message: 'Şifre sıfırlama bağlantısı e-posta adresinize gönderildi.'
+        });
+
+    } catch (error) {
+        console.error('Forgot password error:', error);
+        next(error);
+    }
+});
+
+// @route   POST /auth/reset-password
+// @desc    Reset consumer password with token
+// @access  Public
+router.post('/reset-password', [
+    body('token')
+        .notEmpty()
+        .withMessage('Reset token is required'),
+    body('newPassword')
+        .isLength({ min: 6, max: 128 })
+        .withMessage('Password must be between 6 and 128 characters')
+], async (req, res, next) => {
+    try {
+        // Check for validation errors
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const { token, newPassword } = req.body;
+
+        // Verify reset token
+        let decoded;
+        try {
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
+        } catch (err) {
+            return res.status(400).json({
+                success: false,
+                error: 'Geçersiz veya süresi dolmuş sıfırlama bağlantısı'
+            });
+        }
+
+        // Check token type
+        if (decoded.type !== 'password-reset') {
+            return res.status(400).json({
+                success: false,
+                error: 'Geçersiz token türü'
+            });
+        }
+
+        // Find consumer
+        const consumer = await Consumer.findById(decoded.id);
+
+        if (!consumer) {
+            return res.status(404).json({
+                success: false,
+                error: 'Kullanıcı bulunamadı'
+            });
+        }
+
+        // Update password (will be hashed by pre-save hook)
+        consumer.password = newPassword;
+        await consumer.save();
+
+        console.log(`✅ Password reset successful for: ${consumer.email}`);
+
+        res.status(200).json({
+            success: true,
+            message: 'Şifreniz başarıyla sıfırlandı. Şimdi giriş yapabilirsiniz.'
+        });
+
+    } catch (error) {
+        console.error('Reset password error:', error);
+        next(error);
+    }
+});
+
 
 module.exports = router;
