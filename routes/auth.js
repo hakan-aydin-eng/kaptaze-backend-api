@@ -341,6 +341,12 @@ router.post('/register', [
         // Generate token
         const token = generateToken(consumer, 'consumer');
 
+        // Send welcome email (non-blocking)
+        const emailService = require('../services/emailService');
+        emailService.sendConsumerWelcomeEmail(consumer).catch(err => {
+            console.error('❌ Failed to send welcome email:', err.message);
+        });
+
         // Log successful registration
         console.log(`🎉 New consumer registered: ${consumer.name} ${consumer.surname} (${consumer.email})`);
 

@@ -49,12 +49,25 @@ class EmailService {
     }
 
     async sendWelcomeEmail(user, isRestaurant = false) {
-        const subject = `🌟 KapTaze'ye Hoş Geldiniz!`;
+        const subject = `🎉 KapKazan'a Hoş Geldiniz - Sürpriz Paketler Sizi Bekliyor!`;
         const htmlContent = this.generateWelcomeEmailHTML(user, isRestaurant);
         const textContent = this.generateWelcomeEmailText(user, isRestaurant);
 
         return await this.sendEmail({
             to: user.email,
+            subject,
+            html: htmlContent,
+            text: textContent
+        });
+    }
+
+    async sendConsumerWelcomeEmail(consumer) {
+        const subject = `🎉 kapkazan'a Hoş Geldiniz - Sürpriz Paketler Sizi Bekliyor!`;
+        const htmlContent = this.generateConsumerWelcomeEmailHTML(consumer);
+        const textContent = this.generateConsumerWelcomeEmailText(consumer);
+
+        return await this.sendEmail({
+            to: consumer.email,
             subject,
             html: htmlContent,
             text: textContent
@@ -475,6 +488,119 @@ Platformumuzda keyifli vakit geçirmenizi dileriz!
 Saygılarımızla,
 kapkazan ekibi
 
+© 2025 kapkazan. Tüm hakları saklıdır.
+        `;
+    }
+
+    generateConsumerWelcomeEmailHTML(consumer) {
+        const fullName = `${consumer.name} ${consumer.surname}`;
+        return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+                .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+                .header { background: linear-gradient(135deg, #16a34a, #22c55e); color: white; padding: 30px; text-align: center; }
+                .header h1 { margin: 0; font-size: 28px; }
+                .content { padding: 30px; }
+                .welcome-badge { background: #f0fdf4; border: 2px solid #16a34a; color: #15803d; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center; font-weight: bold; font-size: 18px; }
+                .info-box { background: #f8fafc; border-left: 4px solid #16a34a; padding: 15px; margin: 20px 0; border-radius: 4px; }
+                .info-box strong { color: #15803d; }
+                .features { margin: 20px 0; }
+                .feature-item { padding: 10px 0; border-bottom: 1px solid #e5e7eb; }
+                .feature-item:last-child { border-bottom: none; }
+                .button { display: inline-block; background: #16a34a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; margin: 20px 0; font-weight: bold; }
+                .footer { background: #f8fafc; padding: 20px; text-align: center; color: #6b7280; font-size: 14px; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🎉 Hoş Geldiniz!</h1>
+                    <p>kapkazan - Sürpriz Paket Platformu</p>
+                </div>
+                <div class="content">
+                    <div class="welcome-badge">
+                        kapkazan ailesine hoş geldiniz! 🎊
+                    </div>
+
+                    <p>Merhaba <strong>${fullName}</strong>,</p>
+
+                    <p>kapkazan'a hoş geldiniz! Hesabınız başarıyla oluşturuldu. Artık yerel restoranlardan sürpriz paketler alarak hem tasarruf edebilir, hem de israfın önüne geçebilirsiniz! 🌍💚</p>
+
+                    <div class="info-box">
+                        <p style="margin: 0;"><strong>📧 E-posta:</strong> ${consumer.email}</p>
+                        <p style="margin: 10px 0 0 0;"><strong>🔐 Şifre:</strong> Kayıt olurken belirlediğiniz şifre</p>
+                    </div>
+
+                    <div class="features">
+                        <h3 style="color: #15803d;">✨ kapkazan ile Neler Yapabilirsiniz?</h3>
+                        <div class="feature-item">
+                            <strong>🎁 Sürpriz Paketler:</strong> %50'ye varan indirimlerle lezzetli paketler keşfedin
+                        </div>
+                        <div class="feature-item">
+                            <strong>🏪 Yerel Restoranlar:</strong> Çevrenizdeki restoranları destekleyin
+                        </div>
+                        <div class="feature-item">
+                            <strong>💳 Kolay Ödeme:</strong> Nakit veya online ödeme seçenekleri
+                        </div>
+                        <div class="feature-item">
+                            <strong>📸 Hikaye Paylaş:</strong> Aldığınız paketlerin fotoğrafını paylaşın
+                        </div>
+                        <div class="feature-item">
+                            <strong>⭐ Puan Ver:</strong> Deneyimlerinizi diğer kullanıcılarla paylaşın
+                        </div>
+                    </div>
+
+                    <center>
+                        <a href="https://www.kapkazan.com" class="button">🚀 Hemen Keşfetmeye Başlayın</a>
+                    </center>
+
+                    <p style="margin-top: 30px;">Sorularınız için bize <a href="mailto:bilgi@kapkazan.com">bilgi@kapkazan.com</a> adresinden ulaşabilirsiniz.</p>
+
+                    <p>Keyifli alışverişler,<br><strong>kapkazan ekibi</strong> 💚</p>
+                </div>
+                <div class="footer">
+                    <p>© 2025 kapkazan. Tüm hakları saklıdır.</p>
+                    <p style="margin-top: 10px; font-size: 12px;">Bu mail otomatik olarak gönderilmiştir.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        `;
+    }
+
+    generateConsumerWelcomeEmailText(consumer) {
+        const fullName = `${consumer.name} ${consumer.surname}`;
+        return `
+🎉 kapkazan'a Hoş Geldiniz!
+
+Merhaba ${fullName},
+
+kapkazan ailesine hoş geldiniz! Hesabınız başarıyla oluşturuldu.
+
+GİRİŞ BİLGİLERİNİZ:
+📧 E-posta: ${consumer.email}
+🔐 Şifre: Kayıt olurken belirlediğiniz şifre
+
+✨ kapkazan İLE NELER YAPABİLİRSİNİZ?
+
+🎁 Sürpriz Paketler: %50'ye varan indirimlerle lezzetli paketler
+🏪 Yerel Restoranlar: Çevrenizdeki restoranları destekleyin
+💳 Kolay Ödeme: Nakit veya online ödeme seçenekleri
+📸 Hikaye Paylaş: Aldığınız paketlerin fotoğrafını paylaşın
+⭐ Puan Ver: Deneyimlerinizi paylaşın
+
+🚀 Mobil uygulamadan hemen keşfetmeye başlayın!
+
+Sorularınız için: bilgi@kapkazan.com
+
+Keyifli alışverişler,
+kapkazan ekibi 💚
+
+---
 © 2025 kapkazan. Tüm hakları saklıdır.
         `;
     }
