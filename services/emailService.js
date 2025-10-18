@@ -532,7 +532,11 @@ kapkazan ekibi
 
                     <div class="info-box">
                         <p style="margin: 0;"><strong>📧 E-posta:</strong> ${consumer.email}</p>
-                        <p style="margin: 10px 0 0 0;"><strong>🔐 Şifre:</strong> Kayıt olurken belirlediğiniz şifre</p>
+                        <p style="margin: 10px 0 0 0;"><strong>🔐 Şifre:</strong> Kayıt sırasında belirlediğiniz şifre</p>
+                        <p style="margin: 10px 0 0 0; font-size: 14px; color: #6b7280;">
+                            <strong>❓ Şifrenizi mi unuttunuz?</strong><br>
+                            Mobil uygulamada <strong>"Şifremi Unuttum"</strong> butonuna tıklayarak kolayca yeni şifre oluşturabilirsiniz.
+                        </p>
                     </div>
 
                     <div class="features">
@@ -583,7 +587,11 @@ kapkazan ailesine hoş geldiniz! Hesabınız başarıyla oluşturuldu.
 
 GİRİŞ BİLGİLERİNİZ:
 📧 E-posta: ${consumer.email}
-🔐 Şifre: Kayıt olurken belirlediğiniz şifre
+🔐 Şifre: Kayıt sırasında belirlediğiniz şifre
+
+❓ Şifrenizi mi unuttunuz?
+Mobil uygulamada "Şifremi Unuttum" butonuna tıklayarak
+kolayca yeni şifre oluşturabilirsiniz.
 
 ✨ kapkazan İLE NELER YAPABİLİRSİNİZ?
 
