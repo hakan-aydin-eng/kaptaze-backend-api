@@ -615,6 +615,10 @@ kapkazan ekibi 💚
 
     generatePasswordResetEmailHTML(user, resetToken) {
         const resetUrl = `https://www.kapkazan.com/reset-password.html?token=${resetToken}`;
+        const fullName = user.name && user.surname
+            ? `${user.name} ${user.surname}`
+            : (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : 'Değerli Kullanıcı');
+
         return `
         <!DOCTYPE html>
         <html>
@@ -635,14 +639,14 @@ kapkazan ekibi 💚
             <div class="container">
                 <div class="header">
                     <h1>🔒 Şifre Sıfırlama</h1>
-                    <p>kapkazan Restaurant Platform</p>
+                    <p>kapkazan - Sürpriz Paket Platformu</p>
                 </div>
                 <div class="content">
                     <div class="warning-badge">
                         ⚠️ Şifre sıfırlama talebiniz alındı
                     </div>
 
-                    <p>Sayın <strong>${user.firstName} ${user.lastName}</strong>,</p>
+                    <p>Merhaba <strong>${fullName}</strong>,</p>
 
                     <p>Hesabınız için şifre sıfırlama talebinde bulundunuz. Aşağıdaki butona tıklayarak yeni şifrenizi belirleyebilirsiniz.</p>
 
@@ -671,10 +675,14 @@ kapkazan ekibi 💚
 
     generatePasswordResetEmailText(user, resetToken) {
         const resetUrl = `https://www.kapkazan.com/reset-password.html?token=${resetToken}`;
+        const fullName = user.name && user.surname
+            ? `${user.name} ${user.surname}`
+            : (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : 'Değerli Kullanıcı');
+
         return `
 🔒 Şifre Sıfırlama - kapkazan
 
-Sayın ${user.firstName} ${user.lastName},
+Merhaba ${fullName},
 
 Hesabınız için şifre sıfırlama talebinde bulundunuz.
 
