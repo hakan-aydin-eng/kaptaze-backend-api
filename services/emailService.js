@@ -687,4 +687,5 @@ Bu e-posta otomatik olarak gönderilmiştir.
     }
 }
 
-module.exports = EmailService;
+// Export singleton instance
+module.exports = new EmailService();
