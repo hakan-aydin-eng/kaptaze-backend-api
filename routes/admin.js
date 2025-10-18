@@ -13,12 +13,9 @@ const User = require('../models/User');
 const Consumer = require('../models/Consumer');
 const Package = require('../models/Package');
 const Order = require('../models/Order');
-const EmailService = require('../services/emailService');
+const emailService = require('../services/emailService');
 
 const router = express.Router();
-
-// Initialize email service
-const emailService = new EmailService();
 
 // All admin routes require authentication and admin role
 router.use(authenticate);
