@@ -2790,6 +2790,14 @@ router.post('/notifications/send', async (req, res, next) => {
         }
 
         let tokens = [];
+        // Helper function to extract token string from pushToken field
+        const extractToken = (pushToken) => {
+            if (!pushToken) return null;
+            if (typeof pushToken === 'object' && pushToken.token) return pushToken.token;
+            if (typeof pushToken === 'string') return pushToken;
+            return null;
+        };
+
         let targetDescription = '';
 
         // Determine target users based on type
