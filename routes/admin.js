@@ -14,6 +14,7 @@ const Consumer = require('../models/Consumer');
 const Package = require('../models/Package');
 const Order = require('../models/Order');
 const emailService = require('../services/emailService');
+const firebaseService = require('../services/firebaseService');
 
 const router = express.Router();
 
@@ -2762,6 +2763,121 @@ router.patch('/treasury/commission-settings/custom', [
 
     } catch (error) {
         console.error('❌ Error updating custom commission rate:', error);
+        next(error);
+    }
+});
+
+
+// ==========================================
+// PUSH NOTIFICATIONS (Firebase Cloud Messaging)
+// ==========================================
+
+// @route   POST /admin/notifications/send
+// @desc    Send push notification to mobile app users
+// @access  Private (Admin)
+router.post('/notifications/send', async (req, res, next) => {
+    try {
+        const { type, title, body, targetData, imageUrl } = req.body;
+
+        console.log('📢 Admin sending push notification:', { type, title, body, targetData });
+
+        // Validate input
+        if (!type || !title || !body) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: type, title, body'
+            });
+        }
+
+        let tokens = [];
+        let targetDescription = '';
+
+        // Determine target users based on type
+        switch (type) {
+            case 'all':
+                // Get all consumers with pushToken
+                const allConsumers = await Consumer.find({ pushToken: { $exists: true, $ne: null } });
+                tokens = allConsumers.map(c => c.pushToken).filter(Boolean);
+                targetDescription = 'Tüm kullanıcılar';
+                break;
+
+            case 'city':
+                if (!targetData || !targetData.city) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'City is required for city-targeted notifications'
+                    });
+                }
+                const cityConsumers = await Consumer.find({
+                    'location.city': targetData.city,
+                    pushToken: { $exists: true, $ne: null }
+                });
+                tokens = cityConsumers.map(c => c.pushToken).filter(Boolean);
+                targetDescription = `${targetData.city} şehrindeki kullanıcılar`;
+                break;
+
+            case 'restaurant':
+                if (!targetData || !targetData.restaurantId) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Restaurant ID is required for restaurant-targeted notifications'
+                    });
+                }
+                // Get consumers who favorited this restaurant or have orders from it
+                const restaurantConsumers = await Consumer.find({
+                    $or: [
+                        { favorites: targetData.restaurantId },
+                        { 'orders.restaurant': targetData.restaurantId }
+                    ],
+                    pushToken: { $exists: true, $ne: null }
+                });
+                tokens = restaurantConsumers.map(c => c.pushToken).filter(Boolean);
+                targetDescription = `Belirli restoran müşterileri`;
+                break;
+
+            default:
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid notification type. Must be: all, city, or restaurant'
+                });
+        }
+
+        // Check if we have any tokens
+        if (tokens.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'No users found with push tokens for this target',
+                data: {
+                    tokenCount: 0,
+                    successCount: 0
+                }
+            });
+        }
+
+        console.log(`📱 Sending to ${tokens.length} devices...`);
+
+        // Send via Firebase Admin SDK
+        const result = await firebaseService.sendPushNotification(
+            tokens,
+            { title, body, imageUrl },
+            { type, ...targetData }
+        );
+
+        console.log(`✅ Push notification sent: ${result.successCount}/${tokens.length} delivered`);
+
+        res.json({
+            success: true,
+            message: 'Push notification sent successfully',
+            data: {
+                tokenCount: tokens.length,
+                successCount: result.successCount,
+                failureCount: result.failureCount,
+                target: targetDescription
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error sending push notification:', error);
         next(error);
     }
 });

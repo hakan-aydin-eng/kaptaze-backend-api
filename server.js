@@ -11,6 +11,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const http = require('http');
 const { Server } = require('socket.io');
+const firebaseService = require('./services/firebaseService');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -198,6 +199,9 @@ const startServer = async () => {
         
         const seedData = require('./utils/seedData');
         await seedData();
+        
+        // Initialize Firebase Admin SDK
+        firebaseService.initialize();
         
         server.listen(PORT, () => {
             console.log('\n🚀 KapTaze API Server Started!');
