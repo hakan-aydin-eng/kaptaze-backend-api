@@ -11,7 +11,6 @@ class FirebaseService {
     }
 
     try {
-      // Firebase service account key from environment variable
       const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 
       if (!serviceAccountKey) {
@@ -43,21 +42,30 @@ class FirebaseService {
     }
 
     try {
+      const stringData = {};
+      if (data && typeof data === 'object') {
+        Object.keys(data).forEach(key => {
+          stringData[key] = typeof data[key] === 'string' ? data[key] : JSON.stringify(data[key]);
+        });
+      }
+
       const message = {
         notification: {
           title: notification.title,
           body: notification.body,
           ...(notification.imageUrl && { imageUrl: notification.imageUrl })
         },
-        data: data,
-        // Send to multiple tokens
         tokens: Array.isArray(tokens) ? tokens : [tokens]
       };
+
+      if (Object.keys(stringData).length > 0) {
+        message.data = stringData;
+      }
 
       const response = await admin.messaging().sendEachForMulticast(message);
 
       console.log(`✅ FCM sent: ${response.successCount} success, ${response.failureCount} failed`);
-      // Log detailed errors for debugging
+
       if (response.failureCount > 0) {
         response.responses.forEach((resp, idx) => {
           if (!resp.success) {
@@ -65,7 +73,6 @@ class FirebaseService {
           }
         });
       }
-
 
       return {
         successCount: response.successCount,
@@ -84,15 +91,25 @@ class FirebaseService {
     }
 
     try {
+      const stringData = {};
+      if (data && typeof data === 'object') {
+        Object.keys(data).forEach(key => {
+          stringData[key] = typeof data[key] === 'string' ? data[key] : JSON.stringify(data[key]);
+        });
+      }
+
       const message = {
         notification: {
           title: notification.title,
           body: notification.body,
           ...(notification.imageUrl && { imageUrl: notification.imageUrl })
         },
-        data: data,
         topic: topic
       };
+
+      if (Object.keys(stringData).length > 0) {
+        message.data = stringData;
+      }
 
       const response = await admin.messaging().send(message);
       console.log(`✅ FCM sent to topic "${topic}":`, response);
@@ -105,5 +122,4 @@ class FirebaseService {
   }
 }
 
-// Singleton instance
 module.exports = new FirebaseService();
