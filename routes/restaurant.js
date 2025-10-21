@@ -621,23 +621,60 @@ router.post('/packages', [
 
         // Send notification to users who favorited this restaurant
         try {
-            const pushService = require('../services/pushNotificationService');
+            const Consumer = require('../models/Consumer');
+            const firebaseService = require('../services/firebaseService');
 
-            const notification = {
-                title: `${restaurant.name} beklediğin süpriz paketi ekledi 😱`,
-                body: `${newPackage.name} - Hadi gidelim! 🚀`,
-                type: 'favorite_restaurant_package',
-                data: {
-                    restaurantId: restaurant._id.toString(),
-                    restaurantName: restaurant.name,
-                    packageId: newPackage.id.toString(),
-                    packageName: newPackage.name,
-                    packagePrice: (newPackage.discountedPrice || newPackage.price).toString()
+            // Find all consumers who favorited this restaurant
+            const consumers = await Consumer.find({
+                favoriteRestaurants: restaurant._id
+            });
+
+            if (consumers && consumers.length > 0) {
+                console.log(`👥 Found ${consumers.length} users who favorited ${restaurant.name}`);
+
+                // Extract FCM tokens using the helper function
+                const extractToken = (pushToken) => {
+                    if (!pushToken) return null;
+                    if (typeof pushToken === 'object' && pushToken.token) return pushToken.token;
+                    if (typeof pushToken === 'string') return pushToken;
+                    return null;
+                };
+
+                // Get all FCM tokens (filter out Expo tokens)
+                const allTokens = consumers
+                    .map(c => extractToken(c.pushToken))
+                    .filter(token => {
+                        if (!token) return false;
+                        // Only include FCM tokens (exclude Expo tokens)
+                        if (token.startsWith('ExponentPushToken')) return false;
+                        return true;
+                    });
+
+                if (allTokens.length > 0) {
+                    console.log(`📱 Sending to ${allTokens.length} FCM devices`);
+
+                    const notification = {
+                        title: `${restaurant.name} beklediğin fırsat paketini ekledi! 🎁`,
+                        body: `${newPackage.name} - Hemen kap! 🚀`
+                    };
+
+                    const data = {
+                        type: 'favorite_restaurant_package',
+                        restaurantId: restaurant._id.toString(),
+                        restaurantName: restaurant.name,
+                        packageId: newPackage.id.toString(),
+                        packageName: newPackage.name,
+                        packagePrice: (newPackage.discountedPrice || newPackage.price).toString()
+                    };
+
+                    await firebaseService.sendPushNotification(allTokens, notification, data);
+                    console.log(`✅ Favorite restaurant notification sent to ${allTokens.length} devices`);
+                } else {
+                    console.log('⚠️ No FCM tokens found for favorite users');
                 }
-            };
-
-            await pushService.sendToRestaurantFavorites(restaurant._id, notification);
-            console.log(`📱 Notification sent to users who favorited ${restaurant.name}`);
+            } else {
+                console.log(`📭 No users have favorited ${restaurant.name}`);
+            }
         } catch (notificationError) {
             console.error('Failed to send favorite restaurant notification:', notificationError);
             // Don't fail the package creation if notification fails
