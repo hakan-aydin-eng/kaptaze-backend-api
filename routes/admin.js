@@ -2805,7 +2805,7 @@ router.post('/notifications/send', async (req, res, next) => {
             case 'all':
                 // Get all consumers with pushToken
                 const allConsumers = await Consumer.find({ pushToken: { $exists: true, $ne: null } });
-                tokens = allConsumers.map(c => c.pushToken).filter(Boolean);
+                tokens = allConsumers.map(c => extractToken(c.pushToken)).filter(Boolean);
                 targetDescription = 'Tüm kullanıcılar';
                 break;
 
@@ -2820,7 +2820,7 @@ router.post('/notifications/send', async (req, res, next) => {
                     'location.city': targetData.city,
                     pushToken: { $exists: true, $ne: null }
                 });
-                tokens = cityConsumers.map(c => c.pushToken).filter(Boolean);
+                tokens = cityConsumers.map(c => extractToken(c.pushToken)).filter(Boolean);
                 targetDescription = `${targetData.city} şehrindeki kullanıcılar`;
                 break;
 
@@ -2839,7 +2839,7 @@ router.post('/notifications/send', async (req, res, next) => {
                     ],
                     pushToken: { $exists: true, $ne: null }
                 });
-                tokens = restaurantConsumers.map(c => c.pushToken).filter(Boolean);
+                tokens = restaurantConsumers.map(c => extractToken(c.pushToken)).filter(Boolean);
                 targetDescription = `Belirli restoran müşterileri`;
                 break;
 
