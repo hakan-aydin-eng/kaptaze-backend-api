@@ -57,6 +57,15 @@ class FirebaseService {
       const response = await admin.messaging().sendEachForMulticast(message);
 
       console.log(`✅ FCM sent: ${response.successCount} success, ${response.failureCount} failed`);
+      // Log detailed errors for debugging
+      if (response.failureCount > 0) {
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            console.error(`❌ Token ${idx + 1} failed:`, resp.error?.code, resp.error?.message);
+          }
+        });
+      }
+
 
       return {
         successCount: response.successCount,
