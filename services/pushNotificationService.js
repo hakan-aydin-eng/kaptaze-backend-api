@@ -146,7 +146,85 @@ const sendBulkPushNotifications = async (consumerIds, notification) => {
     }
 };
 
+/**
+ * Send push notification to users who favorited a restaurant
+ * @param {string} restaurantId - MongoDB ObjectId of the restaurant
+ * @param {Object} notification - Notification object { title, body, data, type }
+ * @returns {Promise<Object>} - Results of the push notifications
+ */
+const sendToRestaurantFavorites = async (restaurantId, notification) => {
+    try {
+        console.log(`📤 Sending favorite restaurant notification for restaurant: ${restaurantId}`);
+
+        // Find all consumers who have this restaurant in their favoriteRestaurants array
+        const consumers = await Consumer.find({
+            favoriteRestaurants: restaurantId
+        });
+
+        if (!consumers || consumers.length === 0) {
+            console.log(`❌ No users have favorited restaurant: ${restaurantId}`);
+            return { success: true, sent: 0, message: 'No users favorited this restaurant' };
+        }
+
+        console.log(`👥 Found ${consumers.length} users who favorited this restaurant`);
+
+        // Create messages for all consumers with valid push tokens
+        const messages = [];
+
+        for (const consumer of consumers) {
+            if (consumer.pushToken && consumer.pushToken.token) {
+                const pushToken = consumer.pushToken.token;
+
+                // Check that the push token is valid Expo token
+                if (Expo.isExpoPushToken(pushToken)) {
+                    messages.push({
+                        to: pushToken,
+                        sound: 'default',
+                        title: notification.title || 'Favori Restoranından Yeni Paket!',
+                        body: notification.body || '',
+                        data: notification.data || {},
+                        badge: 1,
+                        priority: 'high',
+                    });
+                    console.log(`✅ Added ${consumer.email} to notification list`);
+                } else {
+                    console.log(`⚠️ Skipping non-Expo token for ${consumer.email}: ${pushToken}`);
+                }
+            }
+        }
+
+        if (messages.length === 0) {
+            console.log('❌ No valid Expo push tokens found for favorite users');
+            return { success: true, sent: 0, message: 'No valid Expo tokens found' };
+        }
+
+        console.log(`📱 Sending ${messages.length} push notifications to favorite users`);
+
+        // Send the push notifications in chunks
+        const chunks = expo.chunkPushNotifications(messages);
+        const tickets = [];
+
+        for (let chunk of chunks) {
+            try {
+                const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+                tickets.push(...ticketChunk);
+                console.log(`✅ Sent chunk of ${chunk.length} notifications`);
+            } catch (error) {
+                console.error('❌ Error sending push notification chunk:', error);
+            }
+        }
+
+        console.log(`✅ Sent ${tickets.length}/${messages.length} push notifications to favorite users`);
+        return { success: true, sent: messages.length, tickets };
+
+    } catch (error) {
+        console.error('❌ Error sending favorite restaurant notifications:', error);
+        return { success: false, error: error.message };
+    }
+};
+
 module.exports = {
     sendPushNotification,
     sendBulkPushNotifications,
+    sendToRestaurantFavorites,
 };
