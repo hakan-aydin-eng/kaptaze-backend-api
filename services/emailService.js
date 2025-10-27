@@ -1,30 +1,23 @@
 /**
- * Email Service - Brevo (Sendinblue) Integration
- * Professional email service for kapkazan
+ * Email Service - Brevo API Integration
+ * Professional email service for kapkazan (HTTP API instead of SMTP)
  */
 
-const nodemailer = require('nodemailer');
+const brevo = require('@getbrevo/brevo');
 
 class EmailService {
     constructor() {
-        // Initialize Brevo SMTP
+        // Initialize Brevo API (HTTP - no SMTP ports needed!)
         const brevoApiKey = process.env.BREVO_API_KEY;
 
         if (brevoApiKey && brevoApiKey.length > 10) {
-            this.transporter = nodemailer.createTransport({
-                host: 'smtp-relay.brevo.com',
-                port: 465,
-                secure: true, // SSL (port 465)
-                auth: {
-                    user: process.env.BREVO_SMTP_USER || 'bilgi@kapkazan.com',
-                    pass: brevoApiKey
-                },
-                connectionTimeout: 10000, // 10 seconds
-                greetingTimeout: 10000,
-                socketTimeout: 10000
-            });
+            this.apiInstance = new brevo.TransactionalEmailsApi();
+            this.apiInstance.setApiKey(
+                brevo.TransactionalEmailsApiApiKeys.apiKey,
+                brevoApiKey
+            );
             this.provider = 'brevo';
-            console.log('📧 Email service initialized with Brevo (SSL Port 465) - Production Ready');
+            console.log('📧 Email service initialized with Brevo API (HTTP) - Production Ready');
         } else {
             this.provider = 'mock';
             console.log('📧 Email service initialized in mock mode (no valid API key)');
@@ -110,21 +103,20 @@ class EmailService {
             console.log('  API Key exists:', !!process.env.BREVO_API_KEY);
             console.log('  API Key length:', process.env.BREVO_API_KEY?.length);
 
-            const emailData = {
-                from: `"${this.fromName}" <${this.fromEmail}>`,
-                to: to,
-                subject: subject,
-                html: html,
-                text: text
-            };
-
             if (this.provider === 'brevo') {
-                console.log('📤 [DEBUG] Sending via Brevo SMTP...');
-                const info = await this.transporter.sendMail(emailData);
+                // Brevo API format
+                const sendSmtpEmail = new brevo.SendSmtpEmail();
+                sendSmtpEmail.sender = { name: this.fromName, email: this.fromEmail };
+                sendSmtpEmail.to = [{ email: to }];
+                sendSmtpEmail.subject = subject;
+                sendSmtpEmail.htmlContent = html;
+                sendSmtpEmail.textContent = text;
+
+                console.log('📤 [DEBUG] Sending via Brevo API (HTTP)...');
+                const response = await this.apiInstance.sendTransacEmail(sendSmtpEmail);
                 console.log(`✅ Email sent successfully to ${to}`);
-                console.log('📨 Message ID:', info.messageId);
-                console.log('📨 Response:', info.response);
-                return { success: true, messageId: info.messageId };
+                console.log('📨 Message ID:', response.messageId);
+                return { success: true, messageId: response.messageId };
             } else {
                 // Mock mode - log email instead of sending
                 console.log('📧 Mock Email Send:', {

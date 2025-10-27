@@ -20,6 +20,7 @@
   "author": "KapTaze Team",
   "license": "MIT",
   "dependencies": {
+    "@getbrevo/brevo": "^3.0.1",
     "@sendgrid/mail": "^8.1.5",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.7.0",
