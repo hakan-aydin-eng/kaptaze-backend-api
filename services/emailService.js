@@ -13,15 +13,18 @@ class EmailService {
         if (brevoApiKey && brevoApiKey.length > 10) {
             this.transporter = nodemailer.createTransport({
                 host: 'smtp-relay.brevo.com',
-                port: 587,
-                secure: false, // TLS
+                port: 465,
+                secure: true, // SSL (port 465)
                 auth: {
                     user: process.env.BREVO_SMTP_USER || 'bilgi@kapkazan.com',
                     pass: brevoApiKey
-                }
+                },
+                connectionTimeout: 10000, // 10 seconds
+                greetingTimeout: 10000,
+                socketTimeout: 10000
             });
             this.provider = 'brevo';
-            console.log('📧 Email service initialized with Brevo - Production Ready');
+            console.log('📧 Email service initialized with Brevo (SSL Port 465) - Production Ready');
         } else {
             this.provider = 'mock';
             console.log('📧 Email service initialized in mock mode (no valid API key)');
