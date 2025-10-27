@@ -702,6 +702,470 @@ Bu e-posta otomatik olarak gönderilmiştir.
 © 2025 kapkazan. Tüm hakları saklıdır.
         `;
     }
+
+    // NEW: Order notification email to restaurant
+    async sendOrderNotificationEmail(order, restaurant) {
+        const subject = '🔔 Yeni Sipariş Aldınız! - kapkazan';
+        const htmlContent = this.generateOrderNotificationHTML(order, restaurant);
+        const textContent = this.generateOrderNotificationText(order, restaurant);
+
+        return await this.sendEmail({
+            to: restaurant.email,
+            subject,
+            html: htmlContent,
+            text: textContent
+        });
+    }
+
+    generateOrderNotificationHTML(order, restaurant) {
+        const customerName = order.customer?.name || 'Müşteri';
+        const customerPhone = order.customer?.phone || 'Belirtilmemiş';
+        const orderNumber = order.orderNumber || order._id;
+        const pickupCode = order.pickupCode || 'N/A';
+        const totalPrice = order.totalPrice || 0;
+        const paymentMethod = order.paymentMethod === 'cash' ? 'Nakit' : 'Online Ödeme';
+
+        // Order items
+        const itemsHTML = order.items?.map(item => `
+            <div class="order-item">
+                <span class="item-name">${item.name || item.title}</span>
+                <span class="item-qty">×${item.quantity}</span>
+                <span class="item-price">₺${item.price}</span>
+            </div>
+        `).join('') || '<p>Sipariş detayları bulunamadı</p>';
+
+        return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); }
+                .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.15); }
+                .header { background: linear-gradient(135deg, #059669 0%, #047857 100%); color: white; padding: 40px 30px; text-align: center; position: relative; }
+                .header::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #fbbf24, #f59e0b, #fbbf24); }
+                .header-icon { font-size: 64px; margin-bottom: 15px; animation: bounce 2s infinite; }
+                @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+                .header h1 { margin: 0; font-size: 32px; font-weight: 900; text-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+                .header p { margin: 10px 0 0; opacity: 0.95; font-size: 16px; font-weight: 500; }
+                .content { padding: 40px 30px; }
+                .success-badge {
+                    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+                    border: 3px solid #059669;
+                    color: #047857;
+                    padding: 20px;
+                    border-radius: 12px;
+                    margin: 25px 0;
+                    text-align: center;
+                    font-weight: bold;
+                    font-size: 18px;
+                    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.2);
+                }
+                .success-badge::before { content: '✨ '; }
+                .success-badge::after { content: ' ✨'; }
+                .order-box {
+                    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+                    border: 3px dashed #059669;
+                    padding: 25px;
+                    border-radius: 12px;
+                    margin: 30px 0;
+                    box-shadow: inset 0 2px 8px rgba(0,0,0,0.05);
+                }
+                .order-box h3 { color: #059669; margin-bottom: 20px; font-size: 20px; }
+                .order-detail { margin: 15px 0; display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e5e7eb; }
+                .order-detail:last-child { border-bottom: none; }
+                .order-label { font-weight: 700; color: #1f2937; font-size: 14px; }
+                .order-value {
+                    font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+                    font-size: 16px;
+                    font-weight: 600;
+                    color: #059669;
+                }
+                .order-item { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; }
+                .item-name { flex: 1; color: #374151; }
+                .item-qty { color: #6b7280; margin: 0 10px; }
+                .item-price { color: #059669; font-weight: 600; }
+                .button {
+                    display: inline-block;
+                    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+                    color: white !important;
+                    padding: 16px 32px;
+                    text-decoration: none;
+                    border-radius: 12px;
+                    margin: 25px 0;
+                    font-weight: 700;
+                    font-size: 16px;
+                    box-shadow: 0 8px 20px rgba(5, 150, 105, 0.3);
+                    transition: all 0.3s;
+                    text-align: center;
+                }
+                .button:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(5, 150, 105, 0.4); }
+                .urgent-notice {
+                    background: #fef3c7;
+                    border-left: 4px solid #f59e0b;
+                    padding: 15px;
+                    margin: 20px 0;
+                    border-radius: 8px;
+                    font-size: 14px;
+                }
+                .footer { background: #f8fafc; padding: 30px; text-align: center; color: #6b7280; font-size: 13px; line-height: 1.6; }
+                .footer strong { color: #059669; }
+                .divider { height: 2px; background: linear-gradient(90deg, transparent, #e5e7eb, transparent); margin: 30px 0; }
+                @media (max-width: 600px) {
+                    body { padding: 10px; }
+                    .content { padding: 25px 20px; }
+                    .header h1 { font-size: 26px; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <div class="header-icon">🔔</div>
+                    <h1>Yeni Sipariş Aldınız!</h1>
+                    <p>kapkazan - Sürpriz Paket Platformu</p>
+                </div>
+                <div class="content">
+                    <div class="success-badge">
+                        Yeni sipariş: ${customerName}
+                    </div>
+
+                    <div class="order-box">
+                        <h3>📦 Sipariş Detayları</h3>
+                        <div class="order-detail">
+                            <span class="order-label">Sipariş Numarası</span>
+                            <span class="order-value">${orderNumber}</span>
+                        </div>
+                        <div class="order-detail">
+                            <span class="order-label">Pickup Kodu</span>
+                            <span class="order-value">${pickupCode}</span>
+                        </div>
+                        <div class="order-detail">
+                            <span class="order-label">Müşteri Adı</span>
+                            <span class="order-value">${customerName}</span>
+                        </div>
+                        <div class="order-detail">
+                            <span class="order-label">Müşteri Telefon</span>
+                            <span class="order-value">${customerPhone}</span>
+                        </div>
+                        <div class="order-detail">
+                            <span class="order-label">Ödeme Yöntemi</span>
+                            <span class="order-value">${paymentMethod}</span>
+                        </div>
+                        <div class="order-detail">
+                            <span class="order-label">Toplam Tutar</span>
+                            <span class="order-value" style="font-size: 20px; font-weight: 800;">₺${totalPrice.toFixed(2)}</span>
+                        </div>
+                    </div>
+
+                    <div class="order-box">
+                        <h3>🍽️ Sipariş İçeriği</h3>
+                        ${itemsHTML}
+                    </div>
+
+                    <div class="urgent-notice">
+                        <strong>⚠️ Önemli:</strong> Lütfen siparişi restoran panelinizden onaylayın ve müşteriyi bilgilendirin.
+                    </div>
+
+                    <center>
+                        <a href="https://www.kapkazan.com/restaurant-panel.html" class="button">
+                            🚀 Restoran Paneline Git
+                        </a>
+                    </center>
+
+                    <div class="divider"></div>
+
+                    <p style="text-align: center; font-size: 16px; color: #374151;">
+                        <strong>İyi satışlar! 🎉</strong><br>
+                        <span style="color: #059669; font-weight: 700;">kapkazan ekibi</span>
+                    </p>
+                </div>
+                <div class="footer">
+                    <p><strong>kapkazan</strong> - Sürpriz Paket Platformu</p>
+                    <p style="margin-top: 10px;">Bu e-posta otomatik olarak gönderilmiştir.</p>
+                    <p>© 2025 kapkazan. Tüm hakları saklıdır.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        `;
+    }
+
+    generateOrderNotificationText(order, restaurant) {
+        const customerName = order.customer?.name || 'Müşteri';
+        const customerPhone = order.customer?.phone || 'Belirtilmemiş';
+        const orderNumber = order.orderNumber || order._id;
+        const pickupCode = order.pickupCode || 'N/A';
+        const totalPrice = order.totalPrice || 0;
+        const paymentMethod = order.paymentMethod === 'cash' ? 'Nakit' : 'Online Ödeme';
+
+        return `
+🔔 Yeni Sipariş Aldınız! - kapkazan
+
+Sayın ${restaurant.businessName || 'Restaurant'},
+
+Yeni bir sipariş aldınız! 🎉
+
+📦 SİPARİŞ DETAYLARI:
+Sipariş No: ${orderNumber}
+Pickup Kodu: ${pickupCode}
+Müşteri: ${customerName}
+Telefon: ${customerPhone}
+Ödeme: ${paymentMethod}
+Toplam Tutar: ₺${totalPrice.toFixed(2)}
+
+⚠️ Lütfen siparişi restoran panelinizden onaylayın.
+
+Panel: https://www.kapkazan.com/restaurant-panel.html
+
+İyi satışlar!
+kapkazan ekibi
+
+---
+Bu e-posta otomatik olarak gönderilmiştir.
+© 2025 kapkazan. Tüm hakları saklıdır.
+        `;
+    }
+
+    // NEW: Order cancellation email to consumer
+    async sendOrderCancellationEmail(order, consumer, reason) {
+        const subject = '⚠️ Siparişiniz İptal Edildi - kapkazan';
+        const htmlContent = this.generateOrderCancellationHTML(order, consumer, reason);
+        const textContent = this.generateOrderCancellationText(order, consumer, reason);
+
+        return await this.sendEmail({
+            to: consumer.email,
+            subject,
+            html: htmlContent,
+            text: textContent
+        });
+    }
+
+    generateOrderCancellationHTML(order, consumer, reason) {
+        const customerName = `${consumer.name} ${consumer.surname}`;
+        const orderNumber = order.orderNumber || order._id;
+        const totalPrice = order.totalPrice || 0;
+        const restaurantName = order.restaurant?.name || order.restaurant?.businessName || 'Restaurant';
+        const paymentMethod = order.paymentMethod === 'cash' ? 'Nakit' : 'Online Ödeme';
+        const refundMessage = order.paymentMethod === 'online'
+            ? '<p style="color: #047857; font-weight: 600;">💳 Online ödemeniz 3-5 iş günü içinde iade edilecektir.</p>'
+            : '<p style="color: #6b7280;">Nakit ödeme yapılmadığı için iade işlemi bulunmamaktadır.</p>';
+
+        return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); }
+                .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.15); }
+                .header { background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%); color: white; padding: 40px 30px; text-align: center; position: relative; }
+                .header::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #fbbf24, #f59e0b, #fbbf24); }
+                .header-icon { font-size: 64px; margin-bottom: 15px; animation: bounce 2s infinite; }
+                @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+                .header h1 { margin: 0; font-size: 32px; font-weight: 900; text-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+                .header p { margin: 10px 0 0; opacity: 0.95; font-size: 16px; font-weight: 500; }
+                .content { padding: 40px 30px; }
+                .warning-badge {
+                    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+                    border: 3px solid #f59e0b;
+                    color: #92400e;
+                    padding: 20px;
+                    border-radius: 12px;
+                    margin: 25px 0;
+                    text-align: center;
+                    font-weight: bold;
+                    font-size: 18px;
+                    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+                }
+                .warning-badge::before { content: '⚠️ '; }
+                .warning-badge::after { content: ' ⚠️'; }
+                .order-box {
+                    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+                    border: 3px dashed #f59e0b;
+                    padding: 25px;
+                    border-radius: 12px;
+                    margin: 30px 0;
+                    box-shadow: inset 0 2px 8px rgba(0,0,0,0.05);
+                }
+                .order-box h3 { color: #f59e0b; margin-bottom: 20px; font-size: 20px; }
+                .order-detail { margin: 15px 0; display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e5e7eb; }
+                .order-detail:last-child { border-bottom: none; }
+                .order-label { font-weight: 700; color: #1f2937; font-size: 14px; }
+                .order-value {
+                    font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+                    font-size: 16px;
+                    font-weight: 600;
+                    color: #f59e0b;
+                }
+                .reason-box {
+                    background: #fef3c7;
+                    border-left: 4px solid #f59e0b;
+                    padding: 20px;
+                    margin: 20px 0;
+                    border-radius: 8px;
+                    font-size: 15px;
+                    line-height: 1.6;
+                }
+                .reason-box strong { color: #92400e; display: block; margin-bottom: 10px; }
+                .button {
+                    display: inline-block;
+                    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+                    color: white !important;
+                    padding: 16px 32px;
+                    text-decoration: none;
+                    border-radius: 12px;
+                    margin: 25px 0;
+                    font-weight: 700;
+                    font-size: 16px;
+                    box-shadow: 0 8px 20px rgba(5, 150, 105, 0.3);
+                    transition: all 0.3s;
+                    text-align: center;
+                }
+                .button:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(5, 150, 105, 0.4); }
+                .refund-notice {
+                    background: #d1fae5;
+                    border: 2px solid #047857;
+                    padding: 20px;
+                    margin: 20px 0;
+                    border-radius: 12px;
+                    text-align: center;
+                }
+                .footer { background: #f8fafc; padding: 30px; text-align: center; color: #6b7280; font-size: 13px; line-height: 1.6; }
+                .footer strong { color: #f59e0b; }
+                .divider { height: 2px; background: linear-gradient(90deg, transparent, #e5e7eb, transparent); margin: 30px 0; }
+                @media (max-width: 600px) {
+                    body { padding: 10px; }
+                    .content { padding: 25px 20px; }
+                    .header h1 { font-size: 26px; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <div class="header-icon">⚠️</div>
+                    <h1>Siparişiniz İptal Edildi</h1>
+                    <p>kapkazan - Sürpriz Paket Platformu</p>
+                </div>
+                <div class="content">
+                    <div class="warning-badge">
+                        Sipariş #${orderNumber} iptal edildi
+                    </div>
+
+                    <p>Sayın <strong>${customerName}</strong>,</p>
+                    <br>
+                    <p><strong>${restaurantName}</strong> restoranından verdiğiniz sipariş maalesef iptal edildi.</p>
+
+                    <div class="order-box">
+                        <h3>📦 İptal Edilen Sipariş Detayları</h3>
+                        <div class="order-detail">
+                            <span class="order-label">Sipariş Numarası</span>
+                            <span class="order-value">${orderNumber}</span>
+                        </div>
+                        <div class="order-detail">
+                            <span class="order-label">Restaurant</span>
+                            <span class="order-value">${restaurantName}</span>
+                        </div>
+                        <div class="order-detail">
+                            <span class="order-label">Ödeme Yöntemi</span>
+                            <span class="order-value">${paymentMethod}</span>
+                        </div>
+                        <div class="order-detail">
+                            <span class="order-label">Tutar</span>
+                            <span class="order-value" style="font-size: 20px; font-weight: 800;">₺${totalPrice.toFixed(2)}</span>
+                        </div>
+                    </div>
+
+                    <div class="reason-box">
+                        <strong>📝 İptal Nedeni:</strong>
+                        <p>${reason || 'Belirtilmemiş'}</p>
+                    </div>
+
+                    <div class="refund-notice">
+                        <h3 style="color: #047857; margin-bottom: 15px;">💰 İade Bilgisi</h3>
+                        ${refundMessage}
+                    </div>
+
+                    <p style="margin: 30px 0; line-height: 1.8; color: #374151;">
+                        Bu durumdan dolayı üzgünüz. Başka restoranlardan sipariş vermeye devam edebilirsiniz!
+                    </p>
+
+                    <center>
+                        <a href="https://www.kapkazan.com" class="button">
+                            🍽️ Yeni Sipariş Ver
+                        </a>
+                    </center>
+
+                    <div class="divider"></div>
+
+                    <p style="margin-top: 30px; color: #6b7280; line-height: 1.8; font-size: 14px;">
+                        Sorularınız için <strong>bilgi@kapkazan.com</strong> adresinden bizimle iletişime geçebilirsiniz.
+                    </p>
+
+                    <p style="text-align: center; font-size: 16px; color: #374151; margin-top: 20px;">
+                        <strong>Anlayışınız için teşekkürler</strong><br>
+                        <span style="color: #f59e0b; font-weight: 700;">kapkazan ekibi</span>
+                    </p>
+                </div>
+                <div class="footer">
+                    <p><strong>kapkazan</strong> - Sürpriz Paket Platformu</p>
+                    <p style="margin-top: 10px;">Bu e-posta otomatik olarak gönderilmiştir.</p>
+                    <p>© 2025 kapkazan. Tüm hakları saklıdır.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        `;
+    }
+
+    generateOrderCancellationText(order, consumer, reason) {
+        const customerName = `${consumer.name} ${consumer.surname}`;
+        const orderNumber = order.orderNumber || order._id;
+        const totalPrice = order.totalPrice || 0;
+        const restaurantName = order.restaurant?.name || order.restaurant?.businessName || 'Restaurant';
+        const paymentMethod = order.paymentMethod === 'cash' ? 'Nakit' : 'Online Ödeme';
+        const refundMessage = order.paymentMethod === 'online'
+            ? '💳 Online ödemeniz 3-5 iş günü içinde iade edilecektir.'
+            : 'Nakit ödeme yapılmadığı için iade işlemi bulunmamaktadır.';
+
+        return `
+⚠️ Siparişiniz İptal Edildi - kapkazan
+
+Sayın ${customerName},
+
+${restaurantName} restoranından verdiğiniz sipariş maalesef iptal edildi.
+
+📦 İPTAL EDİLEN SİPARİŞ:
+Sipariş No: ${orderNumber}
+Restaurant: ${restaurantName}
+Ödeme: ${paymentMethod}
+Tutar: ₺${totalPrice.toFixed(2)}
+
+📝 İPTAL NEDENİ:
+${reason || 'Belirtilmemiş'}
+
+💰 İADE BİLGİSİ:
+${refundMessage}
+
+Bu durumdan dolayı üzgünüz. Başka restoranlardan sipariş vermeye devam edebilirsiniz!
+
+🍽️ Yeni sipariş vermek için: https://www.kapkazan.com
+
+Sorularınız için: bilgi@kapkazan.com
+
+Anlayışınız için teşekkürler,
+kapkazan ekibi
+
+---
+Bu e-posta otomatik olarak gönderilmiştir.
+© 2025 kapkazan. Tüm hakları saklıdır.
+        `;
+    }
 }
 
 // Export singleton instance
