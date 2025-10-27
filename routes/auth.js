@@ -1132,4 +1132,37 @@ router.post('/reset-password', [
 });
 
 
+/**
+ * @route   DELETE /auth/account
+ * @desc    Delete consumer account (Apple App Store requirement - Guideline 5.1.1)
+ * @access  Private (requires authentication)
+ */
+router.delete('/account', auth, async (req, res, next) => {
+    try {
+        console.log(`🗑️ Account deletion request from consumer: ${req.user._id}`);
+
+        // Find and delete consumer
+        const consumer = await Consumer.findByIdAndDelete(req.user._id);
+
+        if (!consumer) {
+            return res.status(404).json({
+                success: false,
+                error: 'Kullanıcı bulunamadı'
+            });
+        }
+
+        console.log(`✅ Account deleted successfully: ${consumer.email}`);
+
+        res.status(200).json({
+            success: true,
+            message: 'Hesabınız başarıyla silindi'
+        });
+
+    } catch (error) {
+        console.error('❌ Account deletion error:', error);
+        next(error);
+    }
+});
+
+
 module.exports = router;
