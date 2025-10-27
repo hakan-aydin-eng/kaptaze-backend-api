@@ -1,23 +1,32 @@
 /**
- * Email Service - SendGrid Integration
- * Professional email service for KapTaze
+ * Email Service - Brevo (Sendinblue) Integration
+ * Professional email service for kapkazan
  */
 
-const sgMail = require('@sendgrid/mail');
+const nodemailer = require('nodemailer');
 
 class EmailService {
     constructor() {
-        // Initialize SendGrid
-        const apiKey = process.env.SENDGRID_API_KEY;
-        if (apiKey && apiKey.length > 10 && apiKey.startsWith('SG.')) {
-            sgMail.setApiKey(apiKey);
-            this.provider = 'sendgrid';
-            console.log('📧 Email service initialized with SendGrid - Production Ready');
+        // Initialize Brevo SMTP
+        const brevoApiKey = process.env.BREVO_API_KEY;
+
+        if (brevoApiKey && brevoApiKey.length > 10) {
+            this.transporter = nodemailer.createTransport({
+                host: 'smtp-relay.brevo.com',
+                port: 587,
+                secure: false, // TLS
+                auth: {
+                    user: process.env.BREVO_SMTP_USER || 'bilgi@kapkazan.com',
+                    pass: brevoApiKey
+                }
+            });
+            this.provider = 'brevo';
+            console.log('📧 Email service initialized with Brevo - Production Ready');
         } else {
             this.provider = 'mock';
             console.log('📧 Email service initialized in mock mode (no valid API key)');
         }
-        
+
         this.fromEmail = process.env.FROM_EMAIL || 'bilgi@kapkazan.com';
         this.fromName = 'kapkazan - Sürpriz Paket Platformu';
     }
@@ -95,27 +104,24 @@ class EmailService {
             console.log('  From Email:', this.fromEmail);
             console.log('  From Name:', this.fromName);
             console.log('  Provider:', this.provider);
-            console.log('  API Key exists:', !!process.env.SENDGRID_API_KEY);
-            console.log('  API Key starts with SG:', process.env.SENDGRID_API_KEY?.startsWith('SG.'));
-            console.log('  API Key length:', process.env.SENDGRID_API_KEY?.length);
+            console.log('  API Key exists:', !!process.env.BREVO_API_KEY);
+            console.log('  API Key length:', process.env.BREVO_API_KEY?.length);
 
             const emailData = {
-                to,
-                from: {
-                    email: this.fromEmail,
-                    name: this.fromName
-                },
-                subject,
-                html,
-                text
+                from: `"${this.fromName}" <${this.fromEmail}>`,
+                to: to,
+                subject: subject,
+                html: html,
+                text: text
             };
 
-            if (this.provider === 'sendgrid') {
-                console.log('📤 [DEBUG] Sending via SendGrid...');
-                const response = await sgMail.send(emailData);
-                console.log(`✅ Email sent successfully to ${to}:`, response[0].statusCode);
-                console.log('📨 Message ID:', response[0].headers['x-message-id']);
-                return { success: true, messageId: response[0].headers['x-message-id'] };
+            if (this.provider === 'brevo') {
+                console.log('📤 [DEBUG] Sending via Brevo SMTP...');
+                const info = await this.transporter.sendMail(emailData);
+                console.log(`✅ Email sent successfully to ${to}`);
+                console.log('📨 Message ID:', info.messageId);
+                console.log('📨 Response:', info.response);
+                return { success: true, messageId: info.messageId };
             } else {
                 // Mock mode - log email instead of sending
                 console.log('📧 Mock Email Send:', {
@@ -131,7 +137,7 @@ class EmailService {
             console.error('❌ [DEBUG] Email send failed:');
             console.error('  Error message:', error.message);
             console.error('  Error code:', error.code);
-            console.error('  Error response:', error.response?.body);
+            console.error('  Error response:', error.response);
             console.error('  Full error:', error);
             throw new Error(`Email send failed: ${error.message}`);
         }
