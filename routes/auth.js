@@ -1137,7 +1137,7 @@ router.post('/reset-password', [
  * @desc    Delete consumer account (Apple App Store requirement - Guideline 5.1.1)
  * @access  Private (requires authentication)
  */
-router.delete('/account', auth, async (req, res, next) => {
+router.delete('/account', authenticate, async (req, res, next) => {
     try {
         console.log(`🗑️ Account deletion request from consumer: ${req.user._id}`);
 
