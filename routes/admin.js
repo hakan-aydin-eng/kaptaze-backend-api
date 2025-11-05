@@ -2898,4 +2898,51 @@ router.post('/notifications/send', async (req, res, next) => {
     }
 });
 
+// @route   GET /admin/debug/tokens
+// @desc    Debug: Show all push tokens (Consumer + DeviceToken)
+// @access  Private (Admin)
+router.get('/debug/tokens', async (req, res, next) => {
+    try {
+        const DeviceToken = require('../models/DeviceToken');
+
+        // Get Consumer tokens
+        const consumers = await Consumer.find({ pushToken: { $exists: true, $ne: null } })
+            .select('email pushToken createdAt');
+
+        // Get DeviceToken tokens
+        const deviceTokens = await DeviceToken.find({ isActive: true })
+            .select('token consumerId platform deviceInfo createdAt');
+
+        res.json({
+            success: true,
+            data: {
+                consumerTokens: {
+                    count: consumers.length,
+                    tokens: consumers.map(c => ({
+                        email: c.email,
+                        token: c.pushToken?.token?.substring(0, 30) + '...',
+                        createdAt: c.createdAt
+                    }))
+                },
+                deviceTokens: {
+                    count: deviceTokens.length,
+                    tokens: deviceTokens.map(d => ({
+                        token: d.token.substring(0, 30) + '...',
+                        consumerId: d.consumerId || 'GUEST',
+                        platform: d.platform,
+                        createdAt: d.createdAt
+                    }))
+                },
+                totalUniqueTokens: new Set([
+                    ...consumers.map(c => c.pushToken?.token).filter(Boolean),
+                    ...deviceTokens.map(d => d.token)
+                ]).size
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error fetching debug tokens:', error);
+        next(error);
+    }
+});
+
 module.exports = router;
