@@ -2805,8 +2805,16 @@ router.post('/notifications/send', async (req, res, next) => {
             case 'all':
                 // Get all consumers with pushToken
                 const allConsumers = await Consumer.find({ pushToken: { $exists: true, $ne: null } });
-                tokens = allConsumers.map(c => extractToken(c.pushToken)).filter(Boolean);
-                targetDescription = 'Tüm kullanıcılar';
+                const consumerTokens = allConsumers.map(c => extractToken(c.pushToken)).filter(Boolean);
+
+                // ALSO get tokens from DeviceToken model (for guest users)
+                const DeviceToken = require('../models/DeviceToken');
+                const allDeviceTokens = await DeviceToken.find({ isActive: true });
+                const deviceTokens = allDeviceTokens.map(d => d.token).filter(Boolean);
+
+                // Combine and deduplicate
+                tokens = [...new Set([...consumerTokens, ...deviceTokens])];
+                targetDescription = 'Tüm kullanıcılar (kayıtlı + misafir)';
                 break;
 
             case 'city':
