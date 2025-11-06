@@ -2898,6 +2898,54 @@ router.post('/notifications/send', async (req, res, next) => {
     }
 });
 
+// @route   DELETE /admin/debug/cleanup-invalid-tokens
+// @desc    Remove invalid push tokens (Expo tokens, etc.)
+// @access  Private (Admin)
+router.delete('/debug/cleanup-invalid-tokens', async (req, res, next) => {
+    try {
+        const DeviceToken = require('../models/DeviceToken');
+
+        // Find invalid tokens
+        const invalidTokens = await DeviceToken.find({
+            $or: [
+                { token: { $regex: /^ExponentPushToken/ } },
+            ]
+        });
+
+        const invalidConsumers = await Consumer.find({
+            'pushToken.token': { $regex: /^ExponentPushToken/ }
+        });
+
+        // Delete invalid DeviceTokens
+        if (invalidTokens.length > 0) {
+            await DeviceToken.deleteMany({
+                _id: { $in: invalidTokens.map(t => t._id) }
+            });
+        }
+
+        // Clear Expo tokens from Consumers
+        if (invalidConsumers.length > 0) {
+            await Consumer.updateMany(
+                { 'pushToken.token': { $regex: /^ExponentPushToken/ } },
+                { $unset: { pushToken: "" } }
+            );
+        }
+
+        res.json({
+            success: true,
+            message: 'Invalid tokens cleaned up',
+            data: {
+                deletedDeviceTokens: invalidTokens.length,
+                clearedConsumerTokens: invalidConsumers.length
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error cleaning up tokens:', error);
+        next(error);
+    }
+});
+
 // @route   GET /admin/debug/tokens
 // @desc    Debug: Show all push tokens (Consumer + DeviceToken)
 // @access  Private (Admin)
