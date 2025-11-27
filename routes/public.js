@@ -576,10 +576,10 @@ router.get('/opportunity-packages', async (req, res, next) => {
                 : 0;
 
             opportunityPackages.push({
-                restaurantId: restaurant._id,
+                restaurantId: String(restaurant._id), // ✅ String for unified format
                 restaurantName: restaurant.name,
                 restaurantImage: restaurant.images?.cover || restaurant.images?.logo || restaurant.imageUrl || restaurant.profileImage,
-                packageId: bestPackage.id || bestPackage._id,
+                packageId: String(bestPackage.id || bestPackage._id), // ✅ String for unified format
                 packageName: bestPackage.name,
                 packageDescription: bestPackage.description,
                 packageImage: bestPackage.image || restaurant.images?.cover,
