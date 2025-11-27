@@ -505,4 +505,116 @@ router.get('/stats', async (req, res, next) => {
     }
 });
 
+// @route   GET /public/opportunity-packages
+// @desc    Get 20 nearest packages for swipe feature (Opportunity Finder)
+// @access  Public
+router.get('/opportunity-packages', async (req, res, next) => {
+    try {
+        const Restaurant = require('../models/Restaurant');
+        const { lat, lon, limit = 20 } = req.query;
+
+        // Validate coordinates
+        const latitude = parseFloat(lat);
+        const longitude = parseFloat(lon);
+
+        if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Valid latitude and longitude are required'
+            });
+        }
+
+        // Find restaurants near user location
+        const restaurants = await Restaurant.find({
+            status: 'active',
+            isVerified: true,
+            'location.coordinates': {
+                $near: {
+                    $geometry: {
+                        type: 'Point',
+                        coordinates: [longitude, latitude]
+                    },
+                    $maxDistance: 5000 // 5km radius
+                }
+            }
+        }).select('name category address location images imageUrl profileImage rating packages');
+
+        // Calculate distance helper function
+        const calculateDistance = (lat1, lon1, lat2, lon2) => {
+            const R = 6371; // Earth radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a =
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return Math.round(R * c * 10) / 10; // Round to 1 decimal
+        };
+
+        // Collect best package from each restaurant
+        let opportunityPackages = [];
+
+        restaurants.forEach(restaurant => {
+            if (!restaurant.packages || restaurant.packages.length === 0) return;
+
+            // Get only active packages with quantity > 0
+            const activePackages = restaurant.packages.filter(pkg =>
+                pkg.status === 'active' && pkg.quantity > 0
+            );
+
+            if (activePackages.length === 0) return;
+
+            // Get the best package (highest discount or newest)
+            const bestPackage = activePackages.sort((a, b) => {
+                const discountA = a.originalPrice ? ((a.originalPrice - a.price) / a.originalPrice) * 100 : 0;
+                const discountB = b.originalPrice ? ((b.originalPrice - b.price) / b.originalPrice) * 100 : 0;
+                return discountB - discountA;
+            })[0];
+
+            // Calculate distance
+            const [restLon, restLat] = restaurant.location?.coordinates || [0, 0];
+            const distance = calculateDistance(latitude, longitude, restLat, restLon);
+
+            // Calculate discount percentage
+            const discount = bestPackage.originalPrice
+                ? Math.round(((bestPackage.originalPrice - bestPackage.price) / bestPackage.originalPrice) * 100)
+                : 0;
+
+            opportunityPackages.push({
+                restaurantId: restaurant._id,
+                restaurantName: restaurant.name,
+                restaurantImage: restaurant.images?.cover || restaurant.images?.logo || restaurant.imageUrl || restaurant.profileImage,
+                packageId: bestPackage.id || bestPackage._id,
+                packageName: bestPackage.name,
+                packageDescription: bestPackage.description,
+                packageImage: bestPackage.image || restaurant.images?.cover,
+                price: bestPackage.price,
+                originalPrice: bestPackage.originalPrice || bestPackage.price,
+                discount: discount,
+                availableQuantity: bestPackage.quantity,
+                distance: distance,
+                rating: restaurant.rating?.average || 0,
+                category: restaurant.category
+            });
+        });
+
+        // Sort by distance (nearest first)
+        opportunityPackages.sort((a, b) => a.distance - b.distance);
+
+        // Limit to requested amount
+        const limitedPackages = opportunityPackages.slice(0, parseInt(limit));
+
+        res.json({
+            success: true,
+            data: limitedPackages,
+            count: limitedPackages.length
+        });
+
+    } catch (error) {
+        console.error('❌ Opportunity packages error:', error);
+        next(error);
+    }
+});
+
 module.exports = router;
