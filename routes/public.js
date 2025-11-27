@@ -524,19 +524,10 @@ router.get('/opportunity-packages', async (req, res, next) => {
             });
         }
 
-        // Find restaurants near user location
+        // Find all active restaurants (filter by distance manually - no geospatial index needed)
         const restaurants = await Restaurant.find({
             status: 'active',
-            isVerified: true,
-            'location.coordinates': {
-                $near: {
-                    $geometry: {
-                        type: 'Point',
-                        coordinates: [longitude, latitude]
-                    },
-                    $maxDistance: 5000 // 5km radius
-                }
-            }
+            isVerified: true
         }).select('name category address location images imageUrl profileImage rating packages');
 
         // Calculate distance helper function
@@ -565,16 +556,19 @@ router.get('/opportunity-packages', async (req, res, next) => {
 
             if (activePackages.length === 0) return;
 
+            // Calculate distance first
+            const [restLon, restLat] = restaurant.location?.coordinates || [0, 0];
+            const distance = calculateDistance(latitude, longitude, restLat, restLon);
+
+            // Skip if restaurant is too far (> 50km)
+            if (distance > 50) return;
+
             // Get the best package (highest discount or newest)
             const bestPackage = activePackages.sort((a, b) => {
                 const discountA = a.originalPrice ? ((a.originalPrice - a.price) / a.originalPrice) * 100 : 0;
                 const discountB = b.originalPrice ? ((b.originalPrice - b.price) / b.originalPrice) * 100 : 0;
                 return discountB - discountA;
             })[0];
-
-            // Calculate distance
-            const [restLon, restLat] = restaurant.location?.coordinates || [0, 0];
-            const distance = calculateDistance(latitude, longitude, restLat, restLon);
 
             // Calculate discount percentage
             const discount = bestPackage.originalPrice
