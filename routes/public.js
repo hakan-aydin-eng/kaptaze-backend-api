@@ -524,10 +524,9 @@ router.get('/opportunity-packages', async (req, res, next) => {
             });
         }
 
-        // Find all active restaurants (filter by distance manually - no geospatial index needed)
+        // Find all active restaurants (same query as /public/restaurants)
         const restaurants = await Restaurant.find({
-            status: 'active',
-            isVerified: true
+            status: 'active'
         }).select('name category address location images imageUrl profileImage rating packages');
 
         // Calculate distance helper function
